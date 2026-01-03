@@ -242,6 +242,16 @@ body {
   flex-direction: column;
   gap: 24px;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+.upload-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 
 .upload-modal__header {
@@ -405,6 +415,105 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.upload-controls {
+  background: var(--bg-panel-soft);
+  border-radius: 20px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upload-controls__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.upload-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upload-field__label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.upload-field select,
+.upload-field input {
+  background: var(--bg-panel);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.upload-apply {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+}
+
+.upload-message {
+  background: rgba(255, 191, 105, 0.12);
+  border: 1px solid rgba(255, 191, 105, 0.28);
+  border-radius: 16px;
+  padding: 10px 12px;
+  color: var(--text);
+}
+
+.upload-selected__header h4 {
+  margin: 0;
+}
+
+.upload-selected__header p {
+  margin: 6px 0 0;
+}
+
+.upload-selected__list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upload-file-row {
+  background: var(--bg-panel-soft);
+  border-radius: 20px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.upload-file-row__name {
+  margin: 0;
+  font-weight: 700;
+}
+
+.upload-file-row__info {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.upload-file-row__controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 700px) {
+  .upload-controls__row,
+  .upload-file-row__controls {
+    grid-template-columns: 1fr;
+  }
 }
 
 .upload-footer-actions {

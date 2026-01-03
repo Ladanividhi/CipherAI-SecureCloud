@@ -1,23 +1,31 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import base64
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import uvicorn
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import firestore
 from pydantic import BaseModel
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from decrypt_file import decrypt_file
 from encrypt_file import encrypt_file
 from firebase_admin_init import firebase_auth, firebase_db
+
+from models.files import FileModel
+from models.tag import TAGS_COLLECTION
+from models.user import UserModel
 
 BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
@@ -66,23 +74,9 @@ class UserContext(BaseModel):
     picture: str | None = None
 
 
-class TokenPayload(BaseModel):
-    id_token: str
-
-
-class EncryptPayload(BaseModel):
-    filename: str
-
-
-class DecryptPayload(BaseModel):
-    filename: str | None = None
-    encrypted_filename: str | None = None
-    key_filename: str | None = None
-    output_filename: str | None = None
-
-
 USERS_COLLECTION = "users"
 FILES_COLLECTION = "user_files"
+MAX_UPLOAD_FILES = 15
 
 
 def sanitize_filename(filename: str) -> str:
@@ -103,6 +97,55 @@ def ensure_key_exists(path: Path, key_type: str) -> None:
         )
 
 
+def ensure_rsa_keys(public_key_path: Path, private_key_path: Path) -> None:
+    """Ensure RSA key material exists for local encryption/decryption.
+
+    - If both keys are missing, generates a fresh keypair.
+    - If private exists but public is missing, derives public from private.
+    - If public exists but private is missing, refuses (cannot decrypt previous files).
+    """
+
+    if private_key_path.exists():
+        if not public_key_path.exists():
+            private_key = serialization.load_pem_private_key(
+                private_key_path.read_bytes(),
+                password=None,
+            )
+            public_key = private_key.public_key()
+            public_pem = public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            public_key_path.parent.mkdir(parents=True, exist_ok=True)
+            public_key_path.write_bytes(public_pem)
+        return
+
+    if public_key_path.exists() and not private_key_path.exists():
+        raise HTTPException(
+            status_code=500,
+            detail=f"Missing private key at {private_key_path}. Cannot decrypt without it.",
+        )
+
+    # Neither exists: generate a new pair.
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = private_key.public_key()
+
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+    private_key_path.parent.mkdir(parents=True, exist_ok=True)
+    public_key_path.parent.mkdir(parents=True, exist_ok=True)
+    private_key_path.write_bytes(private_pem)
+    public_key_path.write_bytes(public_pem)
+
+
 def _file_doc_ref(uid: str, filename: str) -> Tuple[str, Any]:
     safe_name = sanitize_filename(filename)
     doc_id = f"{uid}:{safe_name}"
@@ -118,10 +161,26 @@ def _serialize_timestamp(value: Any) -> Any:
 def _serialize_file_doc(doc: Any) -> Dict[str, Any]:
     payload = doc.to_dict() or {}
     payload["id"] = doc.id
-    for field in ("uploaded_at", "last_decrypted_at"):
+    for field in ("uploaded_at", "last_opemed_at", "expiry_time"):
         if field in payload:
             payload[field] = _serialize_timestamp(payload[field])
     return payload
+
+
+def _parse_expiry(expiry_value: Any) -> Any | None:
+    if expiry_value is None:
+        return None
+    if isinstance(expiry_value, datetime):
+        return expiry_value
+    if not isinstance(expiry_value, str):
+        return None
+    value = expiry_value.strip()
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
 
 
 def _verify_token(id_token: str) -> Dict[str, Any]:
@@ -148,19 +207,25 @@ def _sync_user_profile(decoded_token: Dict[str, Any]) -> None:
     doc_ref = firebase_db.collection(USERS_COLLECTION).document(uid)
     snapshot = doc_ref.get()
 
-    profile: Dict[str, Any] = {
-        "uid": uid,
-        "email": decoded_token.get("email"),
-        "name": decoded_token.get("name") or decoded_token.get("display_name"),
-        "picture": decoded_token.get("picture") or decoded_token.get("photo_url"),
-        "lastLogin": firestore.SERVER_TIMESTAMP,
-    }
+    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
+    public_key: str | None = None
+    if PUBLIC_KEY_PATH.exists():
+        public_key = PUBLIC_KEY_PATH.read_text(encoding="utf-8")
+
+    profile = UserModel(
+        uid=uid,
+        email=decoded_token.get("email"),
+        name=decoded_token.get("name") or decoded_token.get("display_name"),
+        picture=decoded_token.get("picture") or decoded_token.get("photo_url"),
+        public_key=public_key,
+        lastLogin=firestore.SERVER_TIMESTAMP,
+        createdAt=None,
+    ).dict(exclude_none=True)
 
     if not snapshot.exists:
         profile["createdAt"] = firestore.SERVER_TIMESTAMP
 
-    sanitized = {key: value for key, value in profile.items() if value is not None}
-    doc_ref.set(sanitized, merge=True)
+    doc_ref.set(profile, merge=True)
 
 
 def get_current_user(
@@ -174,8 +239,8 @@ def get_current_user(
 
 
 @app.post("/auth/verify")
-def verify_token(payload: TokenPayload) -> UserContext:
-    decoded = _verify_token(payload.id_token)
+def verify_token(id_token: str = Body(..., embed=True)) -> UserContext:
+    decoded = _verify_token(id_token)
     return _build_user_context(decoded)
 
 
@@ -203,31 +268,151 @@ async def upload_file(
             buffer.write(chunk)
 
     _, doc_ref = _file_doc_ref(_user.uid, safe_source_name)
+    record = FileModel(
+        uid=_user.uid,
+        file_name=safe_source_name,
+        size=destination.stat().st_size,
+        uploaded_at=firestore.SERVER_TIMESTAMP,
+        last_opemed_at=None,
+        tad_id=None,
+        expiry_time=None,
+        advance_seciroty=False,
+        aes_key=None,
+    )
     doc_ref.set(
-        {
-            "uid": _user.uid,
-            "filename": safe_source_name,
-            "size_bytes": destination.stat().st_size,
-            "status": "uploaded",
-            "uploaded_at": firestore.SERVER_TIMESTAMP,
-        },
+        record.dict(),
         merge=True,
     )
 
     return {
+        "file_name": safe_source_name,
+        "size": destination.stat().st_size,
+        # Backwards-compatible aliases used by the existing frontend.
         "stored_filename": safe_source_name,
         "size_bytes": destination.stat().st_size,
         "directory": "uploads",
     }
 
 
-@app.post("/encrypt")
-def encrypt_endpoint(
-    payload: EncryptPayload,
+@app.get("/tags")
+def list_tags(_user: UserContext = Depends(get_current_user)):
+    query = firebase_db.collection(TAGS_COLLECTION).stream()
+    items: list[Dict[str, Any]] = []
+    for doc in query:
+        payload = doc.to_dict() or {}
+        payload.setdefault("tag_id", doc.id)
+        items.append(payload)
+    items.sort(key=lambda item: (item.get("tag_name") or item.get("tag_id") or "").lower())
+    return {"tags": items}
+
+
+@app.post("/upload/multiple")
+async def upload_files_multiple(
+    files: list[UploadFile] = File(...),
+    metadata: str = Form(...),
     _user: UserContext = Depends(get_current_user),
 ):
-    ensure_key_exists(PUBLIC_KEY_PATH, "public key")
-    source_name, doc_ref = _file_doc_ref(_user.uid, payload.filename)
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+    if len(files) > MAX_UPLOAD_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum allowed files per upload is {MAX_UPLOAD_FILES}.",
+        )
+
+    try:
+        parsed = json.loads(metadata)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid metadata JSON") from exc
+
+    meta_by_index: list[Dict[str, Any]] | None = None
+    meta_by_name: Dict[str, Dict[str, Any]] | None = None
+
+    if isinstance(parsed, list):
+        meta_by_index = [item for item in parsed if isinstance(item, dict)]
+    elif isinstance(parsed, dict):
+        meta_by_name = {
+            str(key): value
+            for key, value in parsed.items()
+            if isinstance(value, dict)
+        }
+    else:
+        raise HTTPException(status_code=400, detail="metadata must be a list or object")
+
+    results: list[Dict[str, Any]] = []
+
+    for index, upload in enumerate(files):
+        original_name = upload.filename or "upload.bin"
+        safe_source_name = sanitize_filename(original_name)
+
+        item_meta: Dict[str, Any] = {}
+        if meta_by_index is not None:
+            if index < len(meta_by_index):
+                item_meta = meta_by_index[index]
+        elif meta_by_name is not None:
+            item_meta = meta_by_name.get(original_name) or meta_by_name.get(safe_source_name) or {}
+
+        tag_id = item_meta.get("tag_id")
+        expiry_time_raw = item_meta.get("expiry_time")
+
+        if not isinstance(tag_id, str) or not tag_id.strip():
+            raise HTTPException(status_code=400, detail=f"Missing tag for {original_name}.")
+        expiry_time = _parse_expiry(expiry_time_raw)
+        if expiry_time is None:
+            raise HTTPException(status_code=400, detail=f"Missing expiry time for {original_name}.")
+
+        destination = UPLOADS_DIR / safe_source_name
+        if destination.exists():
+            raise HTTPException(
+                status_code=409,
+                detail=f"A file with this name already exists: {safe_source_name}.",
+            )
+
+        with destination.open("wb") as buffer:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                buffer.write(chunk)
+
+        _, doc_ref = _file_doc_ref(_user.uid, safe_source_name)
+        record = {
+            "uid": _user.uid,
+            "file_name": safe_source_name,
+            "size": destination.stat().st_size,
+            "uploaded_at": firestore.SERVER_TIMESTAMP,
+            "last_opemed_at": None,
+            "tag_id": tag_id.strip(),
+            "expiry_time": expiry_time,
+            "advance_security": False,
+            "aes_key": None,
+        }
+        doc_ref.set(record, merge=True)
+
+        results.append(
+            {
+                "file_name": safe_source_name,
+                "size": destination.stat().st_size,
+                "stored_filename": safe_source_name,
+                "size_bytes": destination.stat().st_size,
+                "directory": "uploads",
+            }
+        )
+
+    return {"files": results}
+
+
+@app.post("/encrypt")
+def encrypt_endpoint(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
+    request_name = body.get("file_name") or body.get("filename")
+    if not isinstance(request_name, str) or not request_name.strip():
+        raise HTTPException(status_code=400, detail="file_name is required")
+
+    source_name, doc_ref = _file_doc_ref(_user.uid, request_name)
 
     if not doc_ref.get().exists:
         raise HTTPException(status_code=404, detail="File metadata not found for user")
@@ -250,11 +435,11 @@ def encrypt_endpoint(
         encrypted_key_path=encrypted_key_path,
     )
 
+    encrypted_aes_key_b64 = base64.b64encode(encrypted_key_path.read_bytes()).decode("ascii")
+
     doc_ref.set(
         {
-            "status": "encrypted",
-            "encrypted_filename": encrypted_name,
-            "encrypted_key_filename": encrypted_key_name,
+            "aes_key": encrypted_aes_key_b64,
         },
         merge=True,
     )
@@ -268,19 +453,17 @@ def encrypt_endpoint(
 
 @app.post("/decrypt")
 def decrypt_endpoint(
-    payload: DecryptPayload,
+    body: Dict[str, Any] = Body(...),
     _user: UserContext = Depends(get_current_user),
 ):
-    ensure_key_exists(PRIVATE_KEY_PATH, "private key")
+    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
 
-    if payload.filename:
-        base_name = sanitize_filename(payload.filename)
-        encrypted_name = f"{base_name}.enc"
-    elif payload.encrypted_filename:
-        encrypted_name = sanitize_filename(payload.encrypted_filename)
-        base_name = sanitize_filename(Path(encrypted_name).stem)
-    else:
-        raise HTTPException(status_code=400, detail="filename or encrypted_filename is required")
+    request_name = body.get("file_name") or body.get("filename")
+    if not isinstance(request_name, str) or not request_name.strip():
+        raise HTTPException(status_code=400, detail="file_name is required")
+
+    base_name = sanitize_filename(request_name)
+    encrypted_name = f"{base_name}.enc"
 
     _, doc_ref = _file_doc_ref(_user.uid, base_name)
     if not doc_ref.get().exists:
@@ -290,19 +473,21 @@ def decrypt_endpoint(
     if not encrypted_path.exists():
         raise HTTPException(status_code=404, detail="Encrypted file not found")
 
-    if payload.key_filename:
-        key_name = sanitize_filename(payload.key_filename)
-    else:
-        key_name = f"{Path(encrypted_name).stem}.key"
-    encrypted_key_path = ENCRYPTED_DIR / key_name
+    encrypted_key_path = ENCRYPTED_DIR / f"{base_name}.key"
+
+    doc_snapshot = doc_ref.get()
+    doc_payload = doc_snapshot.to_dict() or {}
+    stored_aes_key = doc_payload.get("aes_key")
+    if (not encrypted_key_path.exists()) and stored_aes_key:
+        try:
+            encrypted_key_path.write_bytes(base64.b64decode(stored_aes_key))
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail="Stored AES key is invalid") from exc
 
     if not encrypted_key_path.exists():
         raise HTTPException(status_code=404, detail="Encrypted AES key not found")
 
-    if payload.output_filename:
-        output_name = sanitize_filename(payload.output_filename)
-    else:
-        output_name = base_name
+    output_name = base_name
 
     output_path = DECRYPTED_DIR / output_name
 
@@ -315,9 +500,7 @@ def decrypt_endpoint(
 
     doc_ref.set(
         {
-            "status": "decrypted",
-            "decrypted_filename": output_name,
-            "last_decrypted_at": firestore.SERVER_TIMESTAMP,
+            "last_opemed_at": firestore.SERVER_TIMESTAMP,
         },
         merge=True,
     )
@@ -333,7 +516,7 @@ def list_files(_user: UserContext = Depends(get_current_user)):
         .stream()
     )
     items = [_serialize_file_doc(doc) for doc in query]
-    items.sort(key=lambda item: (item.get("filename") or "").lower())
+    items.sort(key=lambda item: ((item.get("file_name") or item.get("filename") or "").lower()))
     return {"files": items}
 
 
@@ -366,13 +549,14 @@ def download_file(
         raise HTTPException(status_code=404, detail="File metadata not found for user")
 
     doc = doc_snapshot.to_dict() or {}
-    linked_name = {
-        "uploads": doc.get("filename"),
-        "encrypted": doc.get("encrypted_filename"),
-        "decrypted": doc.get("decrypted_filename"),
+    owned_name = doc.get("file_name") or doc.get("filename")
+    expected_name = {
+        "uploads": owned_name,
+        "encrypted": f"{owned_name}.enc" if owned_name else None,
+        "decrypted": owned_name,
     }.get(category)
 
-    if linked_name != safe_name:
+    if expected_name != safe_name:
         raise HTTPException(status_code=403, detail="Access denied for requested file")
 
     file_path = directories[category] / safe_name

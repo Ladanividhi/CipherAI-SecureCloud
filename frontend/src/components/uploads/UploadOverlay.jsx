@@ -4,122 +4,185 @@ const destinationFolders = [
   { value: '/Clients/Final', label: '/Clients/Final' },
 ];
 
-const mockUploads = [
-  {
-    id: 'contract',
-    name: 'contract_final.pdf',
-    size: '2.4MB',
-    progress: 65,
-    status: 'Encrypting…',
-    badge: 'Encrypting',
-    note: 'Estimating time remaining…',
-    tags: ['Generating tags…'],
-  },
-  {
-    id: 'chart',
-    name: 'Q3_financial_chart.png',
-    size: '1.8MB',
-    progress: 100,
-    status: 'Ready to upload',
-    badge: 'Encrypted',
-    note: 'Ready to upload',
-    tags: ['Financial', 'Report', '2023', 'Add +'],
-  },
-];
+const formatBytes = (size) => {
+  if (typeof size !== 'number') return '—';
+  if (size === 0) return '0 B';
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = size / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
+};
 
-function UploadItem({ file }) {
-  return (
-    <div className="upload-item">
-      <div className="upload-item__meta">
-        <div className="upload-item__icon" />
-        <div>
-          <p className="upload-item__name">{file.name}</p>
-          <p className="upload-item__info">
-            {file.size} • {file.note}
-          </p>
-        </div>
-        <span className={`upload-item__badge ${file.badge === 'Encrypted' ? 'badge-success' : ''}`}>
-          {file.badge}
-        </span>
-      </div>
-      <div className="upload-progress">
-        <div style={{ width: `${file.progress}%` }} />
-      </div>
-      <div className="upload-item__footer">
-        <span>{file.status}</span>
-        <div className="upload-tags">
-          {file.tags.map((tag) => (
-            <span key={`${file.id}-${tag}`}>{tag}</span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function UploadOverlay({ visible, onClose, onBrowse }) {
+export default function UploadOverlay({
+  visible,
+  onClose,
+  onBrowse,
+  onUpload,
+  busy,
+  maxFiles,
+  selectedFiles,
+  tags,
+  applyToAll,
+  onApplyToAllChange,
+  globalTagId,
+  onGlobalTagChange,
+  globalExpiry,
+  onGlobalExpiryChange,
+  onFileTagChange,
+  onFileExpiryChange,
+  message,
+}) {
   if (!visible) {
     return null;
   }
 
+  const canUpload = selectedFiles.length > 0 && !busy;
+
   return (
-    <div className="upload-overlay">
+    <div className="upload-overlay" role="dialog" aria-modal="true" aria-label="Upload files">
       <div className="upload-modal">
         <header className="upload-modal__header">
           <div>
             <h3>Upload Files</h3>
-            <p>Support for PDF, DOCX, PNG, JPG (Max 50MB)</p>
+            <p>
+              Support for PDF, DOCX, PNG, JPG (Max 50MB) • Up to {maxFiles} files
+            </p>
           </div>
-          <button className="ghost-btn" type="button" onClick={onClose}>
+          <button className="ghost-btn" type="button" onClick={onClose} disabled={busy}>
             Close
           </button>
         </header>
-        <section className="upload-dropzone">
-          <div className="upload-dropzone__icon" />
-          <p className="upload-dropzone__title">Drag & drop files here</p>
-          <p className="muted">Support for PDF, DOCX, PNG, JPG (Max 50MB)</p>
-          <button className="primary-btn" type="button" onClick={onBrowse}>
-            Browse files
-          </button>
-        </section>
-        <section className="upload-destination">
-          <span>Destination Folder</span>
-          <div className="destination-select">
-            <span role="img" aria-label="folder">
-              📁
-            </span>
-            <select defaultValue={destinationFolders[0].value}>
-              {destinationFolders.map((folder) => (
-                <option key={folder.value} value={folder.value}>
-                  {folder.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </section>
-        <section className="upload-active">
-          <div className="upload-active__header">
-            <h4>Active Uploads ({mockUploads.length})</h4>
-            <button className="ghost-btn" type="button">
-              Clear All
+
+        <div className="upload-modal__body">
+          <section className="upload-dropzone" aria-label="File picker">
+            <div className="upload-dropzone__icon" />
+            <p className="upload-dropzone__title">Drag & drop files here</p>
+            <p className="muted">Support for PDF, DOCX, PNG, JPG (Max 50MB)</p>
+            <button className="primary-btn" type="button" onClick={onBrowse} disabled={busy}>
+              Browse files
             </button>
-          </div>
-          <div className="upload-list">
-            {mockUploads.map((file) => (
-              <UploadItem key={file.id} file={file} />
-            ))}
-          </div>
-        </section>
+          </section>
+
+          {/* <section className="upload-destination" aria-label="Destination folder">
+            <span>Destination Folder</span>
+            <div className="destination-select">
+              <span role="img" aria-label="folder">
+                📁
+              </span>
+              <select defaultValue={destinationFolders[0].value}>
+                {destinationFolders.map((folder) => (
+                  <option key={folder.value} value={folder.value}>
+                    {folder.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </section> */}
+
+          <section className="upload-controls" aria-label="Upload settings">
+            <div className="upload-controls__row">
+              <label className="upload-field">
+                <span className="upload-field__label">Tag</span>
+                <select
+                  value={globalTagId}
+                  onChange={(e) => onGlobalTagChange(e.target.value)}
+                  disabled={busy}
+                >
+                  <option value="">Select a tag</option>
+                  {tags.map((tag) => (
+                    <option key={tag.tag_id} value={tag.tag_id}>
+                      {tag.tag_name || tag.tag_id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="upload-field">
+                <span className="upload-field__label">Expiry time</span>
+                <input
+                  type="datetime-local"
+                  value={globalExpiry}
+                  onChange={(e) => onGlobalExpiryChange(e.target.value)}
+                  disabled={busy}
+                />
+              </label>
+            </div>
+
+            <label className="upload-apply">
+              <input
+                type="checkbox"
+                checked={applyToAll}
+                onChange={(e) => onApplyToAllChange(e.target.checked)}
+                disabled={busy}
+              />
+              <span>Apply to All</span>
+            </label>
+          </section>
+
+          {message ? <div className="upload-message">{message}</div> : null}
+
+          <section className="upload-selected" aria-label="Selected files">
+            <div className="upload-selected__header">
+              <h4>Selected Files ({selectedFiles.length})</h4>
+              <p className="muted">Set a tag and expiry for each file before uploading.</p>
+            </div>
+
+            {selectedFiles.length ? (
+              <div className="upload-selected__list">
+                {selectedFiles.map((item) => (
+                  <div key={item.id} className="upload-file-row">
+                    <div className="upload-file-row__meta">
+                      <p className="upload-file-row__name">{item.file.name}</p>
+                      <p className="upload-file-row__info">{formatBytes(item.file.size)}</p>
+                    </div>
+                    <div className="upload-file-row__controls">
+                      <label className="upload-field">
+                        <span className="upload-field__label">Tag</span>
+                        <select
+                          value={item.tagId}
+                          onChange={(e) => onFileTagChange(item.id, e.target.value)}
+                          disabled={busy}
+                        >
+                          <option value="">Select a tag</option>
+                          {tags.map((tag) => (
+                            <option key={tag.tag_id} value={tag.tag_id}>
+                              {tag.tag_name || tag.tag_id}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="upload-field">
+                        <span className="upload-field__label">Expiry</span>
+                        <input
+                          type="datetime-local"
+                          value={item.expiry}
+                          onChange={(e) => onFileExpiryChange(item.id, e.target.value)}
+                          disabled={busy}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">No files selected yet. Click “Browse files” to add up to {maxFiles}.</p>
+            )}
+          </section>
+        </div>
+
         <footer className="upload-modal__footer">
-          <div>
-            <p className="muted">Saving to: {destinationFolders[0].label}</p>
-          </div>
+          <div />
           <div className="upload-footer-actions">
-            <button className="ghost-btn" type="button" onClick={onClose}>
+            <button className="ghost-btn" type="button" onClick={onClose} disabled={busy}>
               Cancel
             </button>
-            <button className="primary-btn" type="button">
-              Upload {mockUploads.length} Files →
+            <button className="primary-btn" type="button" onClick={onUpload} disabled={!canUpload}>
+              {busy ? 'Uploading…' : 'Upload Files →'}
             </button>
           </div>
         </footer>

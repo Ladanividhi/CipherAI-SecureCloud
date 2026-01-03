@@ -55,6 +55,8 @@ const statusLabels = {
 	decrypted: 'Ready',
 };
 
+const MAX_UPLOAD_FILES = 15;
+
 const formatBytes = (size) => {
 	if (typeof size !== 'number') return '—';
 	if (size === 0) return '0 B';
@@ -180,15 +182,15 @@ function MyFilesSection({ files, onFileSelect, selectedFile }) {
 				<div className="my-files-list">
 					{files.map((file) => (
 						<button
-							key={file.id || file.filename}
+							key={file.id || file.file_name || file.filename}
 							type="button"
-							className={`my-file-row ${selectedFile?.filename === file.filename ? 'highlight' : ''}`}
+							className={`my-file-row ${(selectedFile?.file_name || selectedFile?.filename) === (file.file_name || file.filename) ? 'highlight' : ''}`}
 							onClick={() => onFileSelect(file)}
 						>
 							<div>
-								<p>{file.filename}</p>
+								<p>{file.file_name || file.filename}</p>
 								<small>
-									{formatDate(file.uploaded_at)} • {formatBytes(file.size_bytes)}
+									{formatDate(file.uploaded_at)} • {formatBytes(file.size ?? file.size_bytes)}
 								</small>
 							</div>
 							<StatusPill status={file.status} />
@@ -239,7 +241,7 @@ function PreviewOverlay({ visible, file, previewUrl, status, onDownload, onShare
 		return null;
 	}
 
-	const lowerName = file.filename?.toLowerCase() || '';
+	const lowerName = (file.file_name || file.filename)?.toLowerCase() || '';
 	const isPdf = lowerName.endsWith('.pdf');
 	const isImage = /\.(png|jpe?g|gif|webp)$/i.test(lowerName);
 
@@ -249,11 +251,11 @@ function PreviewOverlay({ visible, file, previewUrl, status, onDownload, onShare
 		}
 
 		if (isPdf) {
-			return <iframe src={previewUrl} title={file.filename} />;
+			return <iframe src={previewUrl} title={file.file_name || file.filename} />;
 		}
 
 		if (isImage) {
-			return <img src={previewUrl} alt={file.filename} />;
+			return <img src={previewUrl} alt={file.file_name || file.filename} />;
 		}
 
 		return (
@@ -271,9 +273,9 @@ function PreviewOverlay({ visible, file, previewUrl, status, onDownload, onShare
 			<div className="preview-modal" onClick={(event) => event.stopPropagation()}>
 				<header className="preview-modal__header">
 					<div>
-						<p className="details-title">{file.filename}</p>
+						<p className="details-title">{file.file_name || file.filename}</p>
 						<small>
-							Uploaded {formatDate(file.uploaded_at)} • {formatBytes(file.size_bytes)}
+							Uploaded {formatDate(file.uploaded_at)} • {formatBytes(file.size ?? file.size_bytes)}
 						</small>
 					</div>
 					<div className="preview-actions">
@@ -312,6 +314,12 @@ export default function App() {
 	const [authReady, setAuthReady] = useState(false);
 	const [idToken, setIdToken] = useState('');
 	const [showUploader, setShowUploader] = useState(false);
+	const [uploadTags, setUploadTags] = useState([]);
+	const [pendingUploads, setPendingUploads] = useState([]);
+	const [applyToAll, setApplyToAll] = useState(true);
+	const [globalTagId, setGlobalTagId] = useState('');
+	const [globalExpiry, setGlobalExpiry] = useState('');
+	const [uploadMessage, setUploadMessage] = useState('');
 	const [showPreview, setShowPreview] = useState(false);
 	const [previewUrl, setPreviewUrl] = useState('');
 	const fileInputRef = useRef(null);
@@ -319,7 +327,7 @@ export default function App() {
 	const decryptedNameRef = useRef('');
 	const storageUsage = useMemo(() => {
 		const quotaGb = 100;
-		const usedBytes = files.reduce((total, file) => total + (file.size_bytes || 0), 0);
+		const usedBytes = files.reduce((total, file) => total + (file.size ?? file.size_bytes ?? 0), 0);
 		const usedGb = usedBytes / 1024 ** 3;
 		const percent = quotaGb ? Math.min((usedGb / quotaGb) * 100, 100) : 0;
 		return {
@@ -382,6 +390,27 @@ export default function App() {
 		[idToken],
 	);
 
+	const fetchTags = useCallback(async () => {
+		if (!idToken) {
+			setUploadTags([]);
+			return [];
+		}
+		try {
+			const response = await authorizedFetch('/tags');
+			if (!response.ok) {
+				throw new Error('Unable to load tags.');
+			}
+			const data = await response.json();
+			const list = Array.isArray(data.tags) ? data.tags : [];
+			setUploadTags(list);
+			return list;
+		} catch (error) {
+			setUploadMessage(error.message || 'Unable to load tags.');
+			setUploadTags([]);
+			return [];
+		}
+	}, [authorizedFetch, idToken]);
+
 	const fetchFiles = useCallback(async () => {
 		if (!idToken) {
 			setFiles([]);
@@ -413,13 +442,14 @@ export default function App() {
 			if (!file) {
 				return null;
 			}
+			const displayName = file.file_name || file.filename;
 			setBusy(true);
 			setStatus('Decrypting file...');
 			try {
 				const res = await authorizedFetch('/decrypt', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ filename: file.filename }),
+					body: JSON.stringify({ file_name: displayName }),
 				});
 				if (!res.ok) {
 					throw new Error('Decryption failed.');
@@ -436,11 +466,13 @@ export default function App() {
 				const url = URL.createObjectURL(blob);
 				previewObjectUrl.current = url;
 				setPreviewUrl(url);
-				setStatus(`Opened ${file.filename}.`);
+				setStatus(`Opened ${displayName}.`);
 
 				const refreshed = await fetchFiles();
 				if (refreshed?.files) {
-					const updatedEntry = refreshed.files.find((item) => item.filename === file.filename);
+					const updatedEntry = refreshed.files.find(
+						(item) => (item.file_name || item.filename) === displayName,
+					);
 					if (updatedEntry) {
 						setSelectedFile(updatedEntry);
 					}
@@ -458,63 +490,208 @@ export default function App() {
 	);
 
 	const handleUploadClick = () => {
+		setUploadMessage('');
 		setShowUploader(true);
+		fetchTags();
 	};
 
 	const handleCloseUploader = () => {
 		setShowUploader(false);
+		setPendingUploads([]);
+		setGlobalTagId('');
+		setGlobalExpiry('');
+		setApplyToAll(true);
+		setUploadMessage('');
 	};
 
 	const handleBrowseClick = () => {
 		fileInputRef.current?.click();
 	};
 
+	const uploadIdForFile = (file) => `${file.name}:${file.size}:${file.lastModified}`;
+
+	const applyGlobalsToPending = useCallback(
+		(nextGlobalTagId, nextGlobalExpiry) => {
+			setPendingUploads((prev) =>
+				prev.map((item) => {
+					if (!applyToAll) return item;
+					const next = { ...item };
+					if (!next.tagOverridden) {
+						next.tagId = nextGlobalTagId;
+					}
+					if (!next.expiryOverridden) {
+						next.expiry = nextGlobalExpiry;
+					}
+					return next;
+				}),
+			);
+		},
+		[applyToAll],
+	);
+
+	const handleGlobalTagChange = (value) => {
+		setGlobalTagId(value);
+		applyGlobalsToPending(value, globalExpiry);
+	};
+
+	const handleGlobalExpiryChange = (value) => {
+		setGlobalExpiry(value);
+		applyGlobalsToPending(globalTagId, value);
+	};
+
+	const handleApplyToAllChange = (checked) => {
+		setApplyToAll(checked);
+		if (checked) {
+			applyGlobalsToPending(globalTagId, globalExpiry);
+		}
+	};
+
+	const handleFileTagChange = (id, tagId) => {
+		setPendingUploads((prev) =>
+			prev.map((item) => (item.id === id ? { ...item, tagId, tagOverridden: true } : item)),
+		);
+	};
+
+	const handleFileExpiryChange = (id, expiry) => {
+		setPendingUploads((prev) =>
+			prev.map((item) => (item.id === id ? { ...item, expiry, expiryOverridden: true } : item)),
+		);
+	};
+
 	const handleFileChange = async (event) => {
-		const file = event.target.files?.[0];
-		if (!file) return;
-
+		const picked = Array.from(event.target.files || []);
 		try {
-			setShowUploader(false);
-			setBusy(true);
-			setStatus('Uploading file...');
-			const formData = new FormData();
-			formData.append('file', file);
+			if (!picked.length) return;
+			setUploadMessage('');
+			setShowUploader(true);
+			fetchTags();
 
-			const uploadRes = await authorizedFetch('/upload', {
+			setPendingUploads((prev) => {
+				const existingIds = new Set(prev.map((item) => item.id));
+				const remaining = Math.max(MAX_UPLOAD_FILES - prev.length, 0);
+				if (remaining === 0) {
+					setUploadMessage(`You can upload up to ${MAX_UPLOAD_FILES} files at a time.`);
+					return prev;
+				}
+
+				const slice = picked.slice(0, remaining);
+				if (slice.length < picked.length) {
+					setUploadMessage(`File limit reached: only ${MAX_UPLOAD_FILES} files allowed per upload.`);
+				}
+
+				const additions = slice
+					.filter((file) => !existingIds.has(uploadIdForFile(file)))
+					.map((file) => ({
+						id: uploadIdForFile(file),
+						file,
+						tagId: applyToAll ? globalTagId : '',
+						expiry: applyToAll ? globalExpiry : '',
+						tagOverridden: false,
+						expiryOverridden: false,
+					}));
+
+				return [...prev, ...additions];
+			});
+		} finally {
+			event.target.value = '';
+		}
+	};
+
+	const toIsoStringFromDatetimeLocal = (value) => {
+		if (!value) return '';
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return '';
+		return date.toISOString();
+	};
+
+	const handleUploadSelected = useCallback(async () => {
+		if (!pendingUploads.length) {
+			setUploadMessage('Select at least one file to upload.');
+			return;
+		}
+		if (pendingUploads.length > MAX_UPLOAD_FILES) {
+			setUploadMessage(`Maximum allowed files per upload is ${MAX_UPLOAD_FILES}.`);
+			return;
+		}
+
+		const missingTag = pendingUploads.find((item) => !item.tagId);
+		if (missingTag) {
+			setUploadMessage(`Missing tag for ${missingTag.file.name}.`);
+			return;
+		}
+		const missingExpiry = pendingUploads.find((item) => !item.expiry);
+		if (missingExpiry) {
+			setUploadMessage(`Missing expiry time for ${missingExpiry.file.name}.`);
+			return;
+		}
+
+		setBusy(true);
+		setUploadMessage('');
+		setStatus('Uploading files...');
+		try {
+			const formData = new FormData();
+			pendingUploads.forEach((item) => {
+				formData.append('files', item.file);
+			});
+			const metadata = pendingUploads.map((item) => ({
+				filename: item.file.name,
+				tag_id: item.tagId,
+				expiry_time: toIsoStringFromDatetimeLocal(item.expiry),
+			}));
+			formData.append('metadata', JSON.stringify(metadata));
+
+			const uploadRes = await authorizedFetch('/upload/multiple', {
 				method: 'POST',
 				body: formData,
 			});
 			if (!uploadRes.ok) {
-				throw new Error('Upload failed.');
+				let detail = 'Upload failed.';
+				try {
+					const payload = await uploadRes.json();
+					detail = payload.detail || detail;
+				} catch {
+					// ignore
+				}
+				throw new Error(detail);
 			}
 			const uploaded = await uploadRes.json();
-
-			setStatus('Encrypting file...');
-			const encryptRes = await authorizedFetch('/encrypt', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ filename: uploaded.stored_filename }),
-			});
-			if (!encryptRes.ok) {
-				throw new Error('Encryption failed.');
+			const uploadedFiles = Array.isArray(uploaded.files) ? uploaded.files : [];
+			if (!uploadedFiles.length) {
+				throw new Error('Upload response missing files.');
 			}
-			await encryptRes.json();
+
+			for (const entry of uploadedFiles) {
+				const uploadedName = entry.file_name || entry.stored_filename;
+				if (!uploadedName) continue;
+				setStatus(`Encrypting ${uploadedName}...`);
+				const encryptRes = await authorizedFetch('/encrypt', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ file_name: uploadedName }),
+				});
+				if (!encryptRes.ok) {
+					throw new Error(`Encryption failed for ${uploadedName}.`);
+				}
+				await encryptRes.json();
+			}
 
 			const updated = await fetchFiles();
-			const newest = updated?.files?.find((item) => item.filename === uploaded.stored_filename);
-			if (newest) {
-				setSelectedFile(newest);
-				setStatus(`Encrypted ${newest.filename}.`);
-			} else {
-				setStatus('Encrypted file stored locally.');
+			if (updated?.files?.length) {
+				setSelectedFile(updated.files[0]);
 			}
+			setStatus('Upload completed.');
+			setShowUploader(false);
+			setPendingUploads([]);
+			setGlobalTagId('');
+			setGlobalExpiry('');
+			setApplyToAll(true);
 		} catch (error) {
+			setUploadMessage(error.message || 'Something went wrong.');
 			setStatus(error.message || 'Something went wrong.');
 		} finally {
-			event.target.value = '';
 			setBusy(false);
 		}
-	};
+	}, [authorizedFetch, fetchFiles, pendingUploads]);
 
 	const handleFileSelect = useCallback(
 		async (file) => {
@@ -545,6 +722,7 @@ export default function App() {
 			return;
 		}
 		try {
+			const displayName = selectedFile.file_name || selectedFile.filename;
 			if (!previewObjectUrl.current) {
 				await preparePreview(selectedFile);
 			}
@@ -553,11 +731,11 @@ export default function App() {
 			}
 			const anchor = document.createElement('a');
 			anchor.href = previewObjectUrl.current;
-			anchor.download = selectedFile.filename;
+			anchor.download = displayName;
 			document.body.appendChild(anchor);
 			anchor.click();
 			anchor.remove();
-			setStatus(`Downloading ${selectedFile.filename}...`);
+			setStatus(`Downloading ${displayName}...`);
 		} catch (error) {
 			setStatus(error.message || 'Unable to download file.');
 		}
@@ -567,7 +745,7 @@ export default function App() {
 		if (!selectedFile) {
 			return;
 		}
-		const message = `SecureCloud file ready: ${selectedFile.filename}`;
+		const message = `SecureCloud file ready: ${selectedFile.file_name || selectedFile.filename}`;
 		try {
 			if (typeof navigator !== 'undefined' && navigator.share) {
 				await navigator.share({ title: 'SecureCloud File', text: message });
@@ -654,8 +832,26 @@ export default function App() {
 
 	return (
 		<>
-			<input type="file" ref={fileInputRef} onChange={handleFileChange} className="sr-only" />
-			<UploadOverlay visible={showUploader} onClose={handleCloseUploader} onBrowse={handleBrowseClick} />
+			<input type="file" multiple ref={fileInputRef} onChange={handleFileChange} className="sr-only" />
+			<UploadOverlay
+				visible={showUploader}
+				onClose={handleCloseUploader}
+				onBrowse={handleBrowseClick}
+				onUpload={handleUploadSelected}
+				busy={busy}
+				maxFiles={MAX_UPLOAD_FILES}
+				selectedFiles={pendingUploads}
+				tags={uploadTags}
+				applyToAll={applyToAll}
+				onApplyToAllChange={handleApplyToAllChange}
+				globalTagId={globalTagId}
+				onGlobalTagChange={handleGlobalTagChange}
+				globalExpiry={globalExpiry}
+				onGlobalExpiryChange={handleGlobalExpiryChange}
+				onFileTagChange={handleFileTagChange}
+				onFileExpiryChange={handleFileExpiryChange}
+				message={uploadMessage}
+			/>
 			<div className="app-shell">
 				<Sidebar profile={currentUser} onLogout={handleLogout} storage={storageUsage} />
 				<MainContent
