@@ -1,0 +1,25 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Virtual environments
+.env
+.venv/
+
+# Node artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Build outputs
+files/encrypted/
+files/decrypted/
+files/uploads/
+
+# Secrets and keys
+backend/firebase_key.json
+keys/
+
+# OS files
+.DS_Store
+Thumbs.db
