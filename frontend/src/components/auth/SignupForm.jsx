@@ -44,7 +44,7 @@ export default function SignupForm({ onSubmit, onGoogle, busy, error, onSwitch }
             <input
               name="email"
               type="email"
-              placeholder="you@securecloud.dev"
+              placeholder="abc@gmail.com"
               value={formState.email}
               onChange={handleChange}
               disabled={busy}

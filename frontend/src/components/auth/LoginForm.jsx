@@ -32,7 +32,7 @@ export default function LoginForm({ onSubmit, onGoogle, busy, error, onSwitch })
             <input
               name="email"
               type="email"
-              placeholder="you@securecloud.dev"
+              placeholder="you@abc@gmail.com"
               value={formState.email}
               onChange={handleChange}
               disabled={busy}

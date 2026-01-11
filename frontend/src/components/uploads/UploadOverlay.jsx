@@ -67,22 +67,6 @@ export default function UploadOverlay({
             </button>
           </section>
 
-          {/* <section className="upload-destination" aria-label="Destination folder">
-            <span>Destination Folder</span>
-            <div className="destination-select">
-              <span role="img" aria-label="folder">
-                📁
-              </span>
-              <select defaultValue={destinationFolders[0].value}>
-                {destinationFolders.map((folder) => (
-                  <option key={folder.value} value={folder.value}>
-                    {folder.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </section> */}
-
           <section className="upload-controls" aria-label="Upload settings">
             <div className="upload-controls__row">
               <label className="upload-field">
