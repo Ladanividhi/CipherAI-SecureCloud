@@ -7,13 +7,9 @@ from pydantic import BaseModel
 
 class UserModel(BaseModel):
     uid: str
-    email: str | None = None
+    email: str 
     name: str | None = None
     picture: str | None = None
-
-    # Added as requested
-    public_key: str | None = None
-
-    # Existing Firestore fields used by the app
+    public_key: str
     lastLogin: Any | None = None
-    createdAt: Any | None = None
+    createdAt: Any 

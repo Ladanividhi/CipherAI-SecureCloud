@@ -49,7 +49,7 @@ export default function UploadOverlay({
           <div>
             <h3>Upload Files</h3>
             <p>
-              Support for PDF, DOCX, PNG, JPG (Max 50MB) • Up to {maxFiles} files
+              Support for PDF, DOCX, PNG, JPG, Zip and many more • Up to {maxFiles} files
             </p>
           </div>
           <button className="ghost-btn" type="button" onClick={onClose} disabled={busy}>
@@ -61,7 +61,7 @@ export default function UploadOverlay({
           <section className="upload-dropzone" aria-label="File picker">
             <div className="upload-dropzone__icon" />
             <p className="upload-dropzone__title">Drag & drop files here</p>
-            <p className="muted">Support for PDF, DOCX, PNG, JPG (Max 50MB)</p>
+            <p className="muted">Support for PDF, DOCX, PNG, JPG, Zip and many...</p>
             <button className="primary-btn" type="button" onClick={onBrowse} disabled={busy}>
               Browse files
             </button>
@@ -112,7 +112,7 @@ export default function UploadOverlay({
           <section className="upload-selected" aria-label="Selected files">
             <div className="upload-selected__header">
               <h4>Selected Files ({selectedFiles.length})</h4>
-              <p className="muted">Set a tag and expiry for each file before uploading.</p>
+              <p className="muted">You can set a tag and expiry for each file before uploading.</p>
             </div>
 
             {selectedFiles.length ? (
@@ -154,7 +154,7 @@ export default function UploadOverlay({
                 ))}
               </div>
             ) : (
-              <p className="muted">No files selected yet. Click “Browse files” to add up to {maxFiles}.</p>
+              <p className="muted">No files selected yet. Click “Browse files” to add up to {maxFiles} files.</p>
             )}
           </section>
         </div>

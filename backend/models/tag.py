@@ -4,21 +4,10 @@ import sys
 from typing import Iterable
 
 from pydantic import BaseModel
-
-try:
-    from firebase_admin_init import firebase_db
-except ModuleNotFoundError:
-    # Allow running as a script: `python backend/models/tag.py`
-    # by ensuring the `backend/` folder is on sys.path.
-    from pathlib import Path
-
-    BACKEND_DIR = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(BACKEND_DIR))
-    from firebase_admin_init import firebase_db
+from firebase_admin_init import firebase_db
 
 
 TAGS_COLLECTION = "tags"
-
 
 class TagModel(BaseModel):
     tag_id: str

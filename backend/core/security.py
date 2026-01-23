@@ -21,7 +21,7 @@ security = HTTPBearer(auto_error=False)
 
 class UserContext(BaseModel):
     uid: str
-    email: str | None = None
+    email: str 
     name: str | None = None
     picture: str | None = None
 

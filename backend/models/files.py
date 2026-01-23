@@ -10,8 +10,8 @@ class FileModel(BaseModel):
     last_opened_at: Any | None = None
     size: int
     uid: str
-    uploaded_at: Any | None = None
+    uploaded_at: Any 
     tag_id: str | None = None
     expiry_time: Any | None = None
     advance_security: bool = False
-    aes_key: str | None = None
+    aes_key: str 
