@@ -2,10 +2,43 @@ import React from 'react';
 import StatusPill from './StatusPill';
 import { formatBytes, formatDate } from '../utils/formatters';
 
+function isAdvanceSecurityEnabled(file) {
+  if (!file) return true;
+  if (typeof file.advance_security === 'boolean') return file.advance_security;
+  if (typeof file.advance_seciroty === 'boolean') return file.advance_seciroty;
+  return true;
+}
+
+function ChatbotDisabledPanel() {
+  return (
+    <div className="chat-disabled-panel">
+      <div className="chat-disabled-panel__header">
+        <h4>Assistant</h4>
+        <span className="muted">Disabled</span>
+      </div>
+      <div className="chat-disabled-panel__messages">
+        <div className="chat-bubble chat-bubble--assistant">
+          Assistant is disabled due to security settings.
+        </div>
+        <div className="chat-bubble chat-bubble--user">Can you summarize this?</div>
+        <div className="chat-bubble chat-bubble--assistant">
+          This file is protected. Only you can view it.
+        </div>
+      </div>
+      <div className="chat-disabled-panel__composer">
+        <input type="text" disabled value="Assistant disabled due to security settings" />
+        <button type="button" disabled className="primary-btn">Send</button>
+      </div>
+    </div>
+  );
+}
+
 export default function PreviewOverlay({ visible, file, previewUrl, status, onDownload, onShare, onClose, busy }) {
   if (!visible || !file) {
     return null;
   }
+
+  const advanceSecurityEnabled = isAdvanceSecurityEnabled(file);
 
   const lowerName = (file.file_name || file.filename)?.toLowerCase() || '';
   const isPdf = lowerName.endsWith('.pdf');
@@ -34,7 +67,7 @@ export default function PreviewOverlay({ visible, file, previewUrl, status, onDo
 
   return (
     <div className="preview-overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="preview-modal" onClick={(event) => event.stopPropagation()}>
+      <div className={`preview-modal ${advanceSecurityEnabled ? '' : 'preview-modal--split'}`} onClick={(event) => event.stopPropagation()}>
         <header className="preview-modal__header">
           <div>
             <p className="details-title">{file.file_name || file.filename}</p>
@@ -52,6 +85,7 @@ export default function PreviewOverlay({ visible, file, previewUrl, status, onDo
         </header>
         <div className="preview-modal__content">
           <div className={`file-preview ${previewUrl ? 'live' : ''}`}>{renderPreview()}</div>
+          {!advanceSecurityEnabled ? <ChatbotDisabledPanel /> : null}
           <div className="preview-meta">
             <StatusPill status={file.status} />
             {status && <p className="small-status">{status}</p>}

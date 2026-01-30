@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const fallbackUser = {
   name: 'Alex Morgan',
@@ -9,7 +10,8 @@ const fallbackUser = {
 };
 
 const navLinks = [
-  { label: 'My Files', badge: null },
+  { label: 'Dashboard', badge: null, to: '/dashboard' },
+  { label: 'My Files', badge: null, to: '/my-files' },
   { label: 'AI Assistant', badge: 'NEW' },
   { label: 'Smart Search' },
   { label: 'Analytics' },
@@ -18,6 +20,9 @@ const navLinks = [
 ];
 
 export default function Sidebar({ profile, onLogout, storage }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const resolvedUser = {
     name: profile?.displayName || profile?.email || fallbackUser.name,
     plan: profile ? 'SecureCloud Member' : fallbackUser.plan,
@@ -49,7 +54,12 @@ export default function Sidebar({ profile, onLogout, storage }) {
       </div>
       <nav className="nav-links">
         {navLinks.map((link) => (
-          <button key={link.label} className={link.label === 'My Files' ? 'active' : ''} type="button">
+          <button
+            key={link.label}
+            className={link.to && location.pathname.startsWith(link.to) ? 'active' : ''}
+            type="button"
+            onClick={() => (link.to ? navigate(link.to) : null)}
+          >
             <span>{link.label}</span>
             {link.badge && <small>{link.badge}</small>}
           </button>

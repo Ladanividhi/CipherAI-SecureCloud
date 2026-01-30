@@ -62,6 +62,8 @@ def _serialize_file_doc(doc: Any) -> Dict[str, Any]:
     for field in ("uploaded_at", "last_opemed_at", "expiry_time"):
         if field in payload:
             payload[field] = _serialize_timestamp(payload[field])
+    if "last_opemed_at" in payload and "last_opened_at" not in payload:
+        payload["last_opened_at"] = payload["last_opemed_at"]
     return payload
 
 
@@ -194,14 +196,19 @@ async def upload_files_multiple(
         elif meta_by_name is not None:
             item_meta = meta_by_name.get(original_name) or meta_by_name.get(safe_source_name) or {}
 
-        tag_id = item_meta.get("tag_id")
+        tag_id_raw = item_meta.get("tag_id")
         expiry_time_raw = item_meta.get("expiry_time")
+        advance_security_raw = item_meta.get("advance_security")
 
-        if not isinstance(tag_id, str) or not tag_id.strip():
-            raise HTTPException(status_code=400, detail=f"Missing tag for {original_name}.")
+        tag_id: str | None = None
+        if isinstance(tag_id_raw, str) and tag_id_raw.strip():
+          tag_id = tag_id_raw.strip()
+
         expiry_time = _parse_expiry(expiry_time_raw)
-        if expiry_time is None:
-            raise HTTPException(status_code=400, detail=f"Missing expiry time for {original_name}.")
+
+        advance_security = True
+        if isinstance(advance_security_raw, bool):
+            advance_security = advance_security_raw
 
         destination = UPLOADS_DIR / safe_source_name
         if destination.exists():
@@ -224,9 +231,9 @@ async def upload_files_multiple(
             "size": destination.stat().st_size,
             "uploaded_at": firestore.SERVER_TIMESTAMP,
             "last_opemed_at": None,
-            "tag_id": tag_id.strip(),
+            "tag_id": tag_id,
             "expiry_time": expiry_time,
-            "advance_security": False,
+            "advance_security": advance_security,
             "aes_key": None,
         }
         doc_ref.set(record, merge=True)
@@ -360,6 +367,158 @@ def list_files(_user: UserContext = Depends(get_current_user)):
     items = [_serialize_file_doc(doc) for doc in query]
     items.sort(key=lambda item: ((item.get("file_name") or item.get("filename") or "").lower()))
     return {"files": items}
+
+
+@router.get("/files/count")
+def files_count(_user: UserContext = Depends(get_current_user)):
+    """Return total number of files for the current user."""
+    collection = firebase_db.collection(FILES_COLLECTION).where("uid", "==", _user.uid)
+
+    # Prefer Firestore aggregation count if available.
+    try:
+        aggregation = collection.count()  # type: ignore[attr-defined]
+        result = aggregation.get()  # type: ignore[call-arg]
+        # google-cloud-firestore returns a list of aggregation results
+        if isinstance(result, list) and result:
+            value = getattr(result[0], "value", None)
+            if isinstance(value, int):
+                return {"count": value}
+    except Exception:
+        pass
+
+    # Fallback: stream and count.
+    count = 0
+    for _ in collection.stream():
+        count += 1
+    return {"count": count}
+
+
+@router.get("/files/recent")
+def recent_files(limit: int = 10, _user: UserContext = Depends(get_current_user)):
+    """Return most recently opened files for the current user."""
+    safe_limit = max(1, min(int(limit or 10), 50))
+
+    try:
+        query = (
+            firebase_db.collection(FILES_COLLECTION)
+            .where("uid", "==", _user.uid)
+            .order_by("last_opemed_at", direction=firestore.Query.DESCENDING)
+            .limit(safe_limit)
+            .stream()
+        )
+        items = [_serialize_file_doc(doc) for doc in query]
+        # Ensure descending order in case server doesn't guarantee it.
+        items.sort(key=lambda item: (item.get("last_opemed_at") or ""), reverse=True)
+        return {"files": items}
+    except Exception:
+        # Fallback: stream and sort.
+        all_docs = (
+            firebase_db.collection(FILES_COLLECTION)
+            .where("uid", "==", _user.uid)
+            .stream()
+        )
+        items = [_serialize_file_doc(doc) for doc in all_docs]
+        items.sort(key=lambda item: (item.get("last_opemed_at") or ""), reverse=True)
+        return {"files": items[:safe_limit]}
+
+
+@router.get("/files/by-tag/{tag_id}")
+def files_by_tag(tag_id: str, _user: UserContext = Depends(get_current_user)):
+    safe_tag = (tag_id or "").strip().lower()
+    if not safe_tag:
+        raise HTTPException(status_code=400, detail="tag_id is required")
+
+    query = (
+        firebase_db.collection(FILES_COLLECTION)
+        .where("uid", "==", _user.uid)
+        .where("tag_id", "==", safe_tag)
+        .stream()
+    )
+    items = [_serialize_file_doc(doc) for doc in query]
+    items.sort(key=lambda item: ((item.get("file_name") or item.get("filename") or "").lower()))
+    return {"files": items}
+
+
+@router.get("/files/untagged")
+def untagged_files(_user: UserContext = Depends(get_current_user)):
+    """Return all files without a tag_id (null / missing)."""
+    try:
+        query = (
+            firebase_db.collection(FILES_COLLECTION)
+            .where("uid", "==", _user.uid)
+            .where("tag_id", "==", None)
+            .stream()
+        )
+        items = [_serialize_file_doc(doc) for doc in query]
+    except Exception:
+        # Fallback: stream and filter.
+        query = (
+            firebase_db.collection(FILES_COLLECTION)
+            .where("uid", "==", _user.uid)
+            .stream()
+        )
+        items = []
+        for doc in query:
+            payload = _serialize_file_doc(doc)
+            tag_val = payload.get("tag_id")
+            if tag_val is None or (isinstance(tag_val, str) and not tag_val.strip()):
+                items.append(payload)
+
+    items.sort(key=lambda item: ((item.get("file_name") or item.get("filename") or "").lower()))
+    return {"files": items}
+
+
+@router.get("/files/tag-folders")
+def tag_folders(_user: UserContext = Depends(get_current_user)):
+    """Return tag folders (unique tags used by user's files) with counts + untagged count."""
+    query = (
+        firebase_db.collection(FILES_COLLECTION)
+        .where("uid", "==", _user.uid)
+        .stream()
+    )
+
+    tag_counts: dict[str, int] = {}
+    untagged_count = 0
+    total_count = 0
+
+    for doc in query:
+        total_count += 1
+        payload = doc.to_dict() or {}
+        tag_val = payload.get("tag_id")
+        if isinstance(tag_val, str) and tag_val.strip():
+            key = tag_val.strip().lower()
+            tag_counts[key] = tag_counts.get(key, 0) + 1
+        else:
+            untagged_count += 1
+
+    # Map tag_id -> tag_name (fallback to tag_id)
+    tag_name_map: dict[str, str] = {}
+    try:
+        for doc in firebase_db.collection(TAGS_COLLECTION).stream():
+            payload = doc.to_dict() or {}
+            tag_id = payload.get("tag_id") or doc.id
+            tag_name = payload.get("tag_name") or tag_id
+            if isinstance(tag_id, str) and tag_id:
+                tag_name_map[tag_id] = str(tag_name)
+    except Exception:
+        pass
+
+    tags: list[Dict[str, Any]] = []
+    for tag_id, count in tag_counts.items():
+        tags.append(
+            {
+                "tag_id": tag_id,
+                "tag_name": tag_name_map.get(tag_id, tag_id),
+                "count": count,
+            }
+        )
+
+    tags.sort(key=lambda item: ((item.get("tag_name") or item.get("tag_id") or "").lower()))
+    return {
+        "total_count": total_count,
+        "untagged_count": untagged_count,
+        "tags": tags,
+    }
 
 
 @router.get("/download/{category}/{filename}")

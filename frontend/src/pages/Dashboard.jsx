@@ -1,67 +1,119 @@
-import React from 'react';
-import Sidebar from '../components/Sidebar';
-import MainContent from '../components/MainContent';
-import PreviewOverlay from '../components/PreviewOverlay';
-import UploadOverlay from '../components/uploads/UploadOverlay';
-import useAuth from '../hooks/useAuth';
-import useFiles from '../hooks/useFiles';
-import useUploader from '../hooks/useUploader';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import FileList from '../components/FileList';
 
 export default function Dashboard() {
-  const { currentUser, idToken, handleLogout } = useAuth();
-  const filesState = useFiles(idToken);
-  const uploaderState = useUploader({
-    idToken,
-    fetchFiles: filesState.fetchFiles,
-    setSelectedFile: filesState.setSelectedFile,
-    setStatus: filesState.setStatus,
-    busy: filesState.busy,
-    setBusy: filesState.setBusy,
-  });
+  const navigate = useNavigate();
+  const { filesState, uploaderState } = useOutletContext();
+
+  const [fileCount, setFileCount] = useState(0);
+  const [recentFiles, setRecentFiles] = useState([]);
+  const [loadingCount, setLoadingCount] = useState(false);
+  const [loadingRecent, setLoadingRecent] = useState(false);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      setLoadingCount(true);
+      setLoadingRecent(true);
+      try {
+        const [count, recent] = await Promise.all([
+          filesState.fetchFileCount(),
+          filesState.fetchRecentFiles(10),
+        ]);
+        if (!alive) return;
+        setFileCount(count);
+        setRecentFiles(recent);
+      } finally {
+        if (alive) {
+          setLoadingCount(false);
+          setLoadingRecent(false);
+        }
+      }
+    };
+    load();
+    return () => {
+      alive = false;
+    };
+  }, [filesState]);
+
+  const normalizedSearch = useMemo(() => search.trim().toLowerCase(), [search]);
+
+  const visibleRecentFiles = useMemo(() => {
+    if (!normalizedSearch) return recentFiles;
+    return (Array.isArray(recentFiles) ? recentFiles : []).filter((file) => {
+      const filename = String(file.file_name || file.filename || '').toLowerCase();
+      return filename.includes(normalizedSearch);
+    });
+  }, [normalizedSearch, recentFiles]);
+
+  // Dashboard only shows recent files; no need to compute full list filters.
 
   return (
-    <>
-      <input type="file" multiple ref={uploaderState.fileInputRef} onChange={uploaderState.handleFileChange} className="sr-only" />
-      <UploadOverlay
-        visible={uploaderState.showUploader}
-        onClose={uploaderState.handleCloseUploader}
-        onBrowse={uploaderState.handleBrowseClick}
-        onUpload={uploaderState.handleUploadSelected}
-        busy={filesState.busy}
-        maxFiles={uploaderState.MAX_UPLOAD_FILES}
-        selectedFiles={uploaderState.pendingUploads}
-        tags={uploaderState.uploadTags}
-        applyToAll={uploaderState.applyToAll}
-        onApplyToAllChange={uploaderState.handleApplyToAllChange}
-        globalTagId={uploaderState.globalTagId}
-        onGlobalTagChange={uploaderState.handleGlobalTagChange}
-        globalExpiry={uploaderState.globalExpiry}
-        onGlobalExpiryChange={uploaderState.handleGlobalExpiryChange}
-        onFileTagChange={uploaderState.handleFileTagChange}
-        onFileExpiryChange={uploaderState.handleFileExpiryChange}
-        message={uploaderState.uploadMessage}
-      />
-      <div className="app-shell">
-        <Sidebar profile={currentUser} onLogout={handleLogout} storage={filesState.storageUsage} />
-        <MainContent
-          files={filesState.files}
-          onUploadClick={uploaderState.handleUploadClick}
-          onFileSelect={filesState.handleFileSelect}
-          selectedFile={filesState.selectedFile}
-          busy={filesState.busy}
-          status={filesState.status}
-        />
-      </div>
-      <PreviewOverlay
-        visible={filesState.showPreview && Boolean(filesState.selectedFile)}
-        file={filesState.selectedFile}
-        previewUrl={filesState.previewUrl}
-        status={filesState.status}
-        onDownload={filesState.handleDownload}
-        onShare={filesState.handleShare}
-        onClose={filesState.handleClosePreview}
-        busy={filesState.busy}
-      />
-    </>
+    <main className="main-content">
+      <header className="main-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Manage your encrypted files securely.</p>
+        </div>
+        <div className="header-actions">
+          <input
+            type="search"
+            placeholder="Search your files..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <button
+            className="primary-btn"
+            onClick={uploaderState.handleUploadClick}
+            disabled={filesState.busy}
+            type="button"
+          >
+            {filesState.busy ? 'Working...' : 'Upload New File'}
+          </button>
+        </div>
+      </header>
+
+      {filesState.status && <div className="status-banner">{filesState.status}</div>}
+
+      <section className="folders-section">
+        <div className="files-header">
+          <h2>My Files</h2>
+          <span className="muted">Quick access</span>
+        </div>
+        <div className="folder-grid">
+          <button
+            type="button"
+            className="folder-card folder-card--button"
+            onClick={() => navigate('/my-files')}
+          >
+            <div className="folder-icon" style={{ backgroundColor: '#4f7cff' }} />
+            <p>My Files</p>
+            <span>{loadingCount ? '…' : fileCount} files</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="files-section">
+        <div className="files-header">
+          <h2>Recent Files</h2>
+          <span className="muted">Last opened</span>
+        </div>
+        {loadingRecent ? (
+          <p className="muted">Loading recent files…</p>
+        ) : (
+          <FileList
+            title={null}
+            files={visibleRecentFiles}
+            onFileSelect={filesState.handleFileSelect}
+            selectedFile={filesState.selectedFile}
+            emptyMessage={
+              normalizedSearch ? 'No matching recent files.' : 'No recently opened files yet.'
+            }
+          />
+        )}
+      </section>
+    </main>
   );
 }

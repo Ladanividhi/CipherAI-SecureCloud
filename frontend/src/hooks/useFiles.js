@@ -58,6 +58,107 @@ export default function useFiles(idToken) {
     }
   }, [authorizedFetch, idToken]);
 
+  const fetchFileCount = useCallback(async () => {
+    if (!idToken) {
+      return 0;
+    }
+    try {
+      const res = await authorizedFetch('/files/count');
+      if (!res.ok) {
+        throw new Error('Unable to load file count.');
+      }
+      const data = await res.json();
+      const count = typeof data.count === 'number' ? data.count : Number(data.count);
+      return Number.isFinite(count) ? count : 0;
+    } catch (error) {
+      setStatus(error.message || 'Unable to load file count.');
+      return 0;
+    }
+  }, [authorizedFetch, idToken]);
+
+  const fetchRecentFiles = useCallback(
+    async (limit = 10) => {
+      if (!idToken) {
+        return [];
+      }
+      const safeLimit = Math.max(1, Math.min(Number(limit) || 10, 50));
+      try {
+        const res = await authorizedFetch(`/files/recent?limit=${safeLimit}`);
+        if (!res.ok) {
+          throw new Error('Unable to load recent files.');
+        }
+        const data = await res.json();
+        return Array.isArray(data.files) ? data.files : [];
+      } catch (error) {
+        setStatus(error.message || 'Unable to load recent files.');
+        return [];
+      }
+    },
+    [authorizedFetch, idToken],
+  );
+
+  const fetchTagFolders = useCallback(async () => {
+    if (!idToken) {
+      return { totalCount: 0, untaggedCount: 0, tags: [] };
+    }
+    try {
+      const res = await authorizedFetch('/files/tag-folders');
+      if (!res.ok) {
+        throw new Error('Unable to load folders.');
+      }
+      const data = await res.json();
+      return {
+        totalCount: typeof data.total_count === 'number' ? data.total_count : 0,
+        untaggedCount: typeof data.untagged_count === 'number' ? data.untagged_count : 0,
+        tags: Array.isArray(data.tags) ? data.tags : [],
+      };
+    } catch (error) {
+      setStatus(error.message || 'Unable to load folders.');
+      return { totalCount: 0, untaggedCount: 0, tags: [] };
+    }
+  }, [authorizedFetch, idToken]);
+
+  const fetchFilesByTagId = useCallback(
+    async (tagId) => {
+      if (!idToken) {
+        return [];
+      }
+      const safeTagId = String(tagId || '').trim().toLowerCase();
+      if (!safeTagId) {
+        return [];
+      }
+      try {
+        const res = await authorizedFetch(`/files/by-tag/${encodeURIComponent(safeTagId)}`);
+        if (!res.ok) {
+          throw new Error('Unable to load files for tag.');
+        }
+        const data = await res.json();
+        return Array.isArray(data.files) ? data.files : [];
+      } catch (error) {
+        setStatus(error.message || 'Unable to load files for tag.');
+        return [];
+      }
+    },
+    [authorizedFetch, idToken],
+  );
+
+  const fetchUntaggedFiles = useCallback(async () => {
+    if (!idToken) {
+      return [];
+    }
+    try {
+      const res = await authorizedFetch('/files/untagged');
+      if (!res.ok) {
+        throw new Error('Unable to load untagged files.');
+      }
+      const data = await res.json();
+      return Array.isArray(data.files) ? data.files : [];
+    } catch (error) {
+      setStatus(error.message || 'Unable to load untagged files.');
+      return [];
+    }
+  }, [authorizedFetch, idToken]);
+
   useEffect(() => {
     if (idToken) {
       fetchFiles();
@@ -201,6 +302,11 @@ export default function useFiles(idToken) {
     formatBytes,
     formatDate,
     fetchFiles,
+    fetchFileCount,
+    fetchRecentFiles,
+    fetchTagFolders,
+    fetchFilesByTagId,
+    fetchUntaggedFiles,
     preparePreview,
     handleFileSelect,
     handleClosePreview,

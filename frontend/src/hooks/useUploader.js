@@ -9,6 +9,8 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
   const [applyToAll, setApplyToAll] = useState(true);
   const [globalTagId, setGlobalTagId] = useState('');
   const [globalExpiry, setGlobalExpiry] = useState('');
+  const [globalAdvanceSecurity, setGlobalAdvanceSecurity] = useState(true);
+  const [showSecurityWarning, setShowSecurityWarning] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
 
   const fileInputRef = useRef(null);
@@ -47,7 +49,17 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
     setGlobalTagId('');
     setGlobalExpiry('');
     setApplyToAll(true);
+    setGlobalAdvanceSecurity(true);
+    setShowSecurityWarning(false);
     setUploadMessage('');
+  };
+
+  const triggerSecurityWarning = () => {
+    setShowSecurityWarning(true);
+  };
+
+  const handleCloseSecurityWarning = () => {
+    setShowSecurityWarning(false);
   };
 
   const handleBrowseClick = () => {
@@ -57,16 +69,27 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
   const uploadIdForFile = (file) => `${file.name}:${file.size}:${file.lastModified}`;
 
   const applyGlobalsToPending = useCallback(
-    (nextGlobalTagId, nextGlobalExpiry) => {
+    (
+      patch,
+      { force = false } = {
+        force: false,
+      },
+    ) => {
       setPendingUploads((prev) =>
         prev.map((item) => {
-          if (!applyToAll) return item;
+          if (!applyToAll && !force) return item;
           const next = { ...item };
-          if (!next.tagOverridden) {
-            next.tagId = nextGlobalTagId;
+          if (Object.prototype.hasOwnProperty.call(patch, 'tagId')) {
+            next.tagId = patch.tagId;
+            next.tagOverridden = false;
           }
-          if (!next.expiryOverridden) {
-            next.expiry = nextGlobalExpiry;
+          if (Object.prototype.hasOwnProperty.call(patch, 'expiry')) {
+            next.expiry = patch.expiry;
+            next.expiryOverridden = false;
+          }
+          if (Object.prototype.hasOwnProperty.call(patch, 'advance_security')) {
+            next.advance_security = patch.advance_security;
+            next.securityOverridden = false;
           }
           return next;
         }),
@@ -77,31 +100,66 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
 
   const handleGlobalTagChange = (value) => {
     setGlobalTagId(value);
-    applyGlobalsToPending(value, globalExpiry);
+    applyGlobalsToPending({ tagId: value });
   };
 
   const handleGlobalExpiryChange = (value) => {
     setGlobalExpiry(value);
-    applyGlobalsToPending(globalTagId, value);
+    applyGlobalsToPending({ expiry: value });
   };
 
   const handleApplyToAllChange = (checked) => {
     setApplyToAll(checked);
     if (checked) {
-      applyGlobalsToPending(globalTagId, globalExpiry);
+      applyGlobalsToPending(
+        { tagId: globalTagId, expiry: globalExpiry, advance_security: globalAdvanceSecurity },
+        { force: true },
+      );
     }
   };
 
+  const handleGlobalAdvanceSecurityChange = (checked) => {
+    setGlobalAdvanceSecurity(checked);
+    if (!checked) {
+      triggerSecurityWarning();
+    }
+    applyGlobalsToPending({ advance_security: checked });
+  };
+
   const handleFileTagChange = (id, tagId) => {
+    if (applyToAll) {
+      setApplyToAll(false);
+    }
     setPendingUploads((prev) =>
       prev.map((item) => (item.id === id ? { ...item, tagId, tagOverridden: true } : item)),
     );
   };
 
   const handleFileExpiryChange = (id, expiry) => {
+    if (applyToAll) {
+      setApplyToAll(false);
+    }
     setPendingUploads((prev) =>
       prev.map((item) => (item.id === id ? { ...item, expiry, expiryOverridden: true } : item)),
     );
+  };
+
+  const handleFileAdvanceSecurityChange = (id, checked) => {
+    if (applyToAll) {
+      setApplyToAll(false);
+    }
+    setPendingUploads((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, advance_security: checked, securityOverridden: true } : item,
+      ),
+    );
+    if (!checked) {
+      triggerSecurityWarning();
+    }
+  };
+
+  const handleRemovePendingUpload = (id) => {
+    setPendingUploads((prev) => prev.filter((item) => item.id !== id));
   };
 
   const handleFileChange = async (event) => {
@@ -132,8 +190,10 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
             file,
             tagId: applyToAll ? globalTagId : '',
             expiry: applyToAll ? globalExpiry : '',
+            advance_security: applyToAll ? globalAdvanceSecurity : true,
             tagOverridden: false,
             expiryOverridden: false,
+            securityOverridden: false,
           }));
 
         return [...prev, ...additions];
@@ -160,17 +220,6 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
       return;
     }
 
-    const missingTag = pendingUploads.find((item) => !item.tagId);
-    if (missingTag) {
-      setUploadMessage(`Missing tag for ${missingTag.file.name}.`);
-      return;
-    }
-    const missingExpiry = pendingUploads.find((item) => !item.expiry);
-    if (missingExpiry) {
-      setUploadMessage(`Missing expiry time for ${missingExpiry.file.name}.`);
-      return;
-    }
-
     setBusy(true);
     setUploadMessage('');
     setStatus('Uploading files...');
@@ -181,8 +230,9 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
       });
       const metadata = pendingUploads.map((item) => ({
         filename: item.file.name,
-        tag_id: item.tagId,
-        expiry_time: toIsoStringFromDatetimeLocal(item.expiry),
+        tag_id: item.tagId || '',
+        expiry_time: toIsoStringFromDatetimeLocal(item.expiry) || '',
+        advance_security: Boolean(item.advance_security),
       }));
       formData.append('metadata', JSON.stringify(metadata));
 
@@ -231,6 +281,8 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
       setGlobalTagId('');
       setGlobalExpiry('');
       setApplyToAll(true);
+      setGlobalAdvanceSecurity(true);
+      setShowSecurityWarning(false);
     } catch (error) {
       setUploadMessage(error.message || 'Something went wrong.');
       setStatus(error.message || 'Something went wrong.');
@@ -246,6 +298,8 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
     applyToAll,
     globalTagId,
     globalExpiry,
+    globalAdvanceSecurity,
+    showSecurityWarning,
     uploadMessage,
     fileInputRef,
     handleUploadClick,
@@ -256,8 +310,12 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
     handleApplyToAllChange,
     handleGlobalTagChange,
     handleGlobalExpiryChange,
+    handleGlobalAdvanceSecurityChange,
+    handleCloseSecurityWarning,
     handleFileTagChange,
     handleFileExpiryChange,
+    handleFileAdvanceSecurityChange,
+    handleRemovePendingUpload,
     MAX_UPLOAD_FILES,
   };
 }

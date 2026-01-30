@@ -2,16 +2,19 @@ import React from 'react';
 import StatusPill from './StatusPill';
 import { formatBytes, formatDate } from '../utils/formatters';
 
-export default function FileList({ files, onFileSelect, selectedFile }) {
+export default function FileList({ files, onFileSelect, selectedFile, title = 'My Files', emptyMessage = 'No files yet. Upload something to get started.' }) {
+  const resolvedFiles = Array.isArray(files) ? files : [];
   return (
     <section className="files-section">
-      <div className="files-header">
-        <h2>My Files</h2>
-        <span className="muted">{files.length} files</span>
-      </div>
-      {files.length ? (
+      {title ? (
+        <div className="files-header">
+          <h2>{title}</h2>
+          <span className="muted">{resolvedFiles.length} files</span>
+        </div>
+      ) : null}
+      {resolvedFiles.length ? (
         <div className="my-files-list">
-          {files.map((file) => (
+          {resolvedFiles.map((file) => (
             <button
               key={file.id || file.file_name || file.filename}
               type="button"
@@ -29,7 +32,7 @@ export default function FileList({ files, onFileSelect, selectedFile }) {
           ))}
         </div>
       ) : (
-        <p className="empty-state">No files yet. Upload something to get started.</p>
+        <p className="empty-state">{emptyMessage}</p>
       )}
     </section>
   );

@@ -32,8 +32,14 @@ export default function UploadOverlay({
   onGlobalTagChange,
   globalExpiry,
   onGlobalExpiryChange,
+  globalAdvanceSecurity,
+  onGlobalAdvanceSecurityChange,
+  securityWarningVisible,
+  onCloseSecurityWarning,
   onFileTagChange,
   onFileExpiryChange,
+  onFileAdvanceSecurityChange,
+  onRemoveFile,
   message,
 }) {
   if (!visible) {
@@ -68,6 +74,24 @@ export default function UploadOverlay({
           </section>
 
           <section className="upload-controls" aria-label="Upload settings">
+            <div className="upload-security">
+              <div className="upload-security__row">
+                <label className="upload-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(globalAdvanceSecurity)}
+                    onChange={(e) => onGlobalAdvanceSecurityChange(e.target.checked)}
+                    disabled={busy}
+                  />
+                  <span>Advance Security</span>
+                </label>
+              </div>
+
+              <p className="muted upload-security__hint">
+                Advance Security is enabled by default for all selected files.
+              </p>
+            </div>
+
             <div className="upload-controls__row">
               <label className="upload-field">
                 <span className="upload-field__label">Tag</span>
@@ -83,6 +107,7 @@ export default function UploadOverlay({
                     </option>
                   ))}
                 </select>
+                <span className="upload-field__hint">Optional</span>
               </label>
 
               <label className="upload-field">
@@ -93,6 +118,7 @@ export default function UploadOverlay({
                   onChange={(e) => onGlobalExpiryChange(e.target.value)}
                   disabled={busy}
                 />
+                <span className="upload-field__hint">Optional</span>
               </label>
             </div>
 
@@ -112,18 +138,33 @@ export default function UploadOverlay({
           <section className="upload-selected" aria-label="Selected files">
             <div className="upload-selected__header">
               <h4>Selected Files ({selectedFiles.length})</h4>
-              <p className="muted">You can set a tag and expiry for each file before uploading.</p>
+              <p className="muted">Tag and expiry are optional. You can also configure Advance Security per file.</p>
             </div>
 
             {selectedFiles.length ? (
               <div className="upload-selected__list">
                 {selectedFiles.map((item) => (
-                  <div key={item.id} className="upload-file-row">
-                    <div className="upload-file-row__meta">
-                      <p className="upload-file-row__name">{item.file.name}</p>
-                      <p className="upload-file-row__info">{formatBytes(item.file.size)}</p>
+                  <div key={item.id} className="upload-file-card">
+                    <button
+                      className="upload-file-card__remove"
+                      type="button"
+                      onClick={() => onRemoveFile(item.id)}
+                      disabled={busy}
+                      aria-label={`Remove ${item.file.name}`}
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+
+                    <div className="upload-file-card__meta">
+                      <div className="upload-file-card__icon" aria-hidden="true" />
+                      <div>
+                        <p className="upload-file-card__name">{item.file.name}</p>
+                        <p className="upload-file-card__info">{formatBytes(item.file.size)}</p>
+                      </div>
                     </div>
-                    <div className="upload-file-row__controls">
+
+                    <div className="upload-file-card__controls">
                       <label className="upload-field">
                         <span className="upload-field__label">Tag</span>
                         <select
@@ -138,6 +179,7 @@ export default function UploadOverlay({
                             </option>
                           ))}
                         </select>
+                        <span className="upload-field__hint">Optional</span>
                       </label>
 
                       <label className="upload-field">
@@ -148,6 +190,17 @@ export default function UploadOverlay({
                           onChange={(e) => onFileExpiryChange(item.id, e.target.value)}
                           disabled={busy}
                         />
+                        <span className="upload-field__hint">Optional</span>
+                      </label>
+
+                      <label className="upload-check upload-check--full">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(item.advance_security)}
+                          onChange={(e) => onFileAdvanceSecurityChange(item.id, e.target.checked)}
+                          disabled={busy}
+                        />
+                        <span>Advance Security</span>
                       </label>
                     </div>
                   </div>
@@ -171,6 +224,23 @@ export default function UploadOverlay({
           </div>
         </footer>
       </div>
+
+      {securityWarningVisible ? (
+        <div className="security-warning-overlay" role="dialog" aria-modal="true" aria-label="Advance security warning">
+          <div className="security-warning-modal">
+            <h4>Advance Security Disabled</h4>
+            <p>
+              Now no one will be able to view your file except you. You will also not be allowed to use chatbot
+              features for this file.
+            </p>
+            <div className="security-warning-actions">
+              <button className="primary-btn" type="button" onClick={onCloseSecurityWarning}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
