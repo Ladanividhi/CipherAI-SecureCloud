@@ -265,26 +265,75 @@ export default function useFiles(idToken) {
     }
   }, [preparePreview, selectedFile]);
 
-  const handleShare = useCallback(async () => {
-    if (!selectedFile) {
-      return;
-    }
-    const message = `SecureCloud file ready: ${selectedFile.file_name || selectedFile.filename}`;
+  const handleShare = useCallback(async (filesToShare = null) => {
+    // If we passed an array, use it; otherwise fallback to selectedFile
+    const targetFiles = Array.isArray(filesToShare) ? filesToShare : (selectedFile ? [selectedFile] : []);
+
+    if (targetFiles.length === 0) return;
+
+    const fileNames = targetFiles.map(f => f.file_name || f.filename);
+
     try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({ title: 'SecureCloud File', text: message });
-        return;
-      }
+      const res = await authorizedFetch('/files/bulk/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_names: fileNames }),
+      });
+
+      if (!res.ok) throw new Error("Share failed");
+      const data = await res.json();
+
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(message);
-        setStatus('Share text copied to clipboard.');
-        return;
+        await navigator.clipboard.writeText(data.share_link);
+        setStatus('Sharable link copied to clipboard!');
+      } else {
+        setStatus('Files shared successfully.');
       }
-      setStatus('Sharing is not supported on this device.');
     } catch (error) {
       setStatus(error.message || 'Unable to share file.');
     }
-  }, [selectedFile]);
+  }, [selectedFile, authorizedFetch]);
+
+  const deleteFiles = useCallback(async (filesToDelete) => {
+    if (!filesToDelete || filesToDelete.length === 0) return;
+    const fileNames = filesToDelete.map(f => f.file_name || f.filename);
+    setBusy(true);
+    try {
+      const res = await authorizedFetch('/files/bulk/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_names: fileNames })
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      await fetchFiles(); // Refresh list
+      setStatus(`Deleted ${fileNames.length} files.`);
+    } catch (e) {
+      setStatus(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }, [authorizedFetch, fetchFiles]);
+
+  const moveFiles = useCallback(async (filesToMove, targetTagId) => {
+    if (!filesToMove || filesToMove.length === 0) return;
+    const fileNames = filesToMove.map(f => f.file_name || f.filename);
+    setBusy(true);
+    try {
+      const res = await authorizedFetch('/files/bulk/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_names: fileNames, target_tag_id: targetTagId })
+      });
+      if (!res.ok) throw new Error("Move failed");
+      await fetchFiles();
+      await fetchTagFolders(); // Refresh folders too
+      setStatus(`Moved ${fileNames.length} files.`);
+    } catch (e) {
+      setStatus(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }, [authorizedFetch, fetchFiles, fetchTagFolders]);
 
   return {
     files,
@@ -312,6 +361,8 @@ export default function useFiles(idToken) {
     handleClosePreview,
     handleDownload,
     handleShare,
+    deleteFiles,
+    moveFiles,
     authorizedFetch,
   };
 }

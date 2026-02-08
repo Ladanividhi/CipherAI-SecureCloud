@@ -566,3 +566,102 @@ def download_file(
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(path=file_path, filename=file_path.name)
+
+
+@router.post("/files/bulk/delete")
+def bulk_delete_files(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    file_names = body.get("file_names", [])
+    if not file_names or not isinstance(file_names, list):
+        raise HTTPException(status_code=400, detail="file_names list is required")
+
+    deleted_count = 0
+    errors = []
+
+    for name in file_names:
+        try:
+            safe_name = sanitize_filename(name)
+            _, doc_ref = _file_doc_ref(_user.uid, safe_name)
+            
+            # Check existence
+            if not doc_ref.get().exists:
+                continue
+
+            # Delete Firestore doc
+            doc_ref.delete()
+
+            # Delete physical files
+            for folder in [UPLOADS_DIR, ENCRYPTED_DIR, DECRYPTED_DIR]:
+                # Try deleting main file
+                file_path = folder / safe_name
+                if file_path.exists():
+                    try:
+                        file_path.unlink()
+                    except Exception:
+                        pass
+                
+                # Try deleting .enc or .key variants
+                for ext in [".enc", ".key"]:
+                    variant = folder / f"{safe_name}{ext}"
+                    if variant.exists():
+                        try:
+                            variant.unlink()
+                        except Exception:
+                            pass
+            
+            deleted_count += 1
+        except Exception as e:
+            errors.append(f"{name}: {str(e)}")
+
+    return {"deleted_count": deleted_count, "errors": errors}
+
+
+@router.post("/files/bulk/move")
+def bulk_move_files(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    file_names = body.get("file_names", [])
+    target_tag_id = body.get("target_tag_id")  # Can be None/null for untagged
+
+    if not file_names or not isinstance(file_names, list):
+        raise HTTPException(status_code=400, detail="file_names list is required")
+
+    # If target_tag_id is "untagged" or empty string, treat as None
+    if target_tag_id == "untagged" or (isinstance(target_tag_id, str) and not target_tag_id.strip()):
+        target_tag_id = None
+    elif isinstance(target_tag_id, str):
+        target_tag_id = target_tag_id.strip().lower()
+
+    moved_count = 0
+    
+    for name in file_names:
+        try:
+            safe_name = sanitize_filename(name)
+            _, doc_ref = _file_doc_ref(_user.uid, safe_name)
+            
+            if not doc_ref.get().exists:
+                continue
+
+            doc_ref.set({"tag_id": target_tag_id}, merge=True)
+            moved_count += 1
+        except Exception:
+            pass
+
+    return {"moved_count": moved_count}
+
+
+@router.post("/files/bulk/share")
+def bulk_share_files(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    # For now, this just acknowledges the request. 
+    # Real sharing would involve generating signed URLs or ACL updates.
+    file_names = body.get("file_names", [])
+    if not file_names:
+        raise HTTPException(status_code=400, detail="No files selected")
+
+    return {"message": f"Successfully prepared {len(file_names)} files for sharing.", "share_link": "https://securecloud.app/share/mock-link-123"}

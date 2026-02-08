@@ -1,5 +1,16 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  FolderOpen,
+  Bot,
+  Search,
+  PieChart,
+  Share2,
+  Trash2,
+  Settings,
+  LogOut
+} from 'lucide-react';
 
 const fallbackUser = {
   name: 'Alex Morgan',
@@ -10,13 +21,13 @@ const fallbackUser = {
 };
 
 const navLinks = [
-  { label: 'Dashboard', badge: null, to: '/dashboard' },
-  { label: 'My Files', badge: null, to: '/my-files' },
-  { label: 'AI Assistant', badge: 'NEW' },
-  { label: 'Smart Search' },
-  { label: 'Analytics' },
-  { label: 'Shared Files' },
-  { label: 'Trash Bin' },
+  { label: 'Dashboard', badge: null, to: '/dashboard', icon: LayoutDashboard },
+  { label: 'My Files', badge: null, to: '/my-files', icon: FolderOpen },
+  { label: 'AI Assistant', badge: 'NEW', icon: Bot },
+  { label: 'Smart Search', icon: Search },
+  { label: 'Analytics', icon: PieChart },
+  { label: 'Shared Files', icon: Share2 },
+  { label: 'Trash Bin', icon: Trash2 },
 ];
 
 export default function Sidebar({ profile, onLogout, storage }) {
@@ -60,14 +71,21 @@ export default function Sidebar({ profile, onLogout, storage }) {
             type="button"
             onClick={() => (link.to ? navigate(link.to) : null)}
           >
+            {link.icon && <link.icon size={20} style={{ marginRight: '10px' }} />}
             <span>{link.label}</span>
             {link.badge && <small>{link.badge}</small>}
           </button>
         ))}
       </nav>
       <div className="sidebar-actions">
-        <button className="settings-btn" type="button">Settings</button>
-        <button className="logout-btn" type="button" onClick={onLogout}>Log out</button>
+        <button className="settings-btn" type="button">
+          <Settings size={18} style={{ marginRight: '8px' }} />
+          Settings
+        </button>
+        <button className="logout-btn" type="button" onClick={onLogout}>
+          <LogOut size={18} style={{ marginRight: '8px' }} />
+          Log out
+        </button>
       </div>
     </aside>
   );

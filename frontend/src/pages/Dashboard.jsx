@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import { FolderOpen } from 'lucide-react';
 import FileList from '../components/FileList';
 
 export default function Dashboard() {
@@ -87,10 +88,30 @@ export default function Dashboard() {
             type="button"
             className="folder-card folder-card--button"
             onClick={() => navigate('/my-files')}
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: '20px',
+              padding: '24px',
+              border: '1px solid rgba(99, 102, 241, 0.3)',
+              background: 'linear-gradient(145deg, rgba(31, 41, 55, 0.6), rgba(17, 24, 39, 0.8))'
+            }}
           >
-            <div className="folder-icon" style={{ backgroundColor: '#4f7cff' }} />
-            <p>My Files</p>
-            <span>{loadingCount ? '…' : fileCount} files</span>
+            <div className="folder-icon" style={{
+              width: '56px',
+              height: '56px',
+              backgroundColor: 'rgba(99, 102, 241, 0.2)',
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: '16px'
+            }}>
+              <FolderOpen size={28} color="#6366f1" />
+            </div>
+            <div style={{ textAlign: 'left' }}>
+              <p style={{ fontSize: '1.2rem', margin: '0 0 4px 0' }}>All Files</p>
+              <span style={{ fontSize: '1rem', opacity: 0.8 }}>{loadingCount ? '…' : fileCount} stored files</span>
+            </div>
           </button>
         </div>
       </section>
