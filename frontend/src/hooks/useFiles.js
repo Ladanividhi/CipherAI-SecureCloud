@@ -159,6 +159,40 @@ export default function useFiles(idToken) {
     }
   }, [authorizedFetch, idToken]);
 
+  const fetchAllTags = useCallback(async () => {
+    if (!idToken) {
+      return [];
+    }
+    try {
+      const res = await authorizedFetch('/tags');
+      if (!res.ok) {
+        throw new Error('Unable to load tags.');
+      }
+      const data = await res.json();
+      return Array.isArray(data.tags) ? data.tags : [];
+    } catch (error) {
+      setStatus(error.message || 'Unable to load tags.');
+      return [];
+    }
+  }, [authorizedFetch, idToken]);
+
+  const searchFiles = useCallback(async (query) => {
+    if (!idToken || !query || !query.trim()) {
+      return [];
+    }
+    try {
+      const res = await authorizedFetch(`/files/search?q=${encodeURIComponent(query.trim())}`);
+      if (!res.ok) {
+        throw new Error('Search failed.');
+      }
+      const data = await res.json();
+      return Array.isArray(data.results) ? data.results : [];
+    } catch (error) {
+      setStatus(error.message || 'Search failed.');
+      return [];
+    }
+  }, [authorizedFetch, idToken]);
+
   useEffect(() => {
     if (idToken) {
       fetchFiles();
@@ -354,8 +388,10 @@ export default function useFiles(idToken) {
     fetchFileCount,
     fetchRecentFiles,
     fetchTagFolders,
+    fetchAllTags,
     fetchFilesByTagId,
     fetchUntaggedFiles,
+    searchFiles,
     preparePreview,
     handleFileSelect,
     handleClosePreview,

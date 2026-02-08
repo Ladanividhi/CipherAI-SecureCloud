@@ -357,6 +357,45 @@ def decrypt_endpoint(
     return {"decrypted_filename": output_name, "directory": "decrypted"}
 
 
+@router.get("/files/search")
+def search_files(q: str = "", _user: UserContext = Depends(get_current_user)):
+    """Search all user files by name and return results with folder path."""
+    query_str = (q or "").strip().lower()
+    if not query_str:
+        return {"results": []}
+
+    # Fetch all user files
+    docs = (
+        firebase_db.collection(FILES_COLLECTION)
+        .where("uid", "==", _user.uid)
+        .stream()
+    )
+    all_files = [_serialize_file_doc(doc) for doc in docs]
+
+    # Build tag_id -> tag_name map
+    tag_docs = firebase_db.collection(TAGS_COLLECTION).stream()
+    tag_map: Dict[str, str] = {}
+    for td in tag_docs:
+        tp = td.to_dict() or {}
+        tag_map[td.id] = tp.get("tag_name") or td.id
+
+    # Filter by search query
+    results = []
+    for f in all_files:
+        fname = f.get("file_name") or f.get("filename") or ""
+        if query_str in fname.lower():
+            tag_id = f.get("tag_id")
+            if tag_id and isinstance(tag_id, str) and tag_id.strip():
+                folder_name = tag_map.get(tag_id.strip(), tag_id.strip())
+                f["folder_path"] = folder_name
+            else:
+                f["folder_path"] = "Untagged"
+            results.append(f)
+
+    results.sort(key=lambda item: (item.get("file_name") or item.get("filename") or "").lower())
+    return {"results": results}
+
+
 @router.get("/files")
 def list_files(_user: UserContext = Depends(get_current_user)):
     query = (

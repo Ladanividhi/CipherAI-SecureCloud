@@ -28,18 +28,17 @@ export default function TagFiles() {
   useEffect(() => {
     let alive = true;
     const resolveName = async () => {
-      // Always fetch folders to populate dropdown
-      const summary = await filesState.fetchTagFolders();
+      // Fetch all tags from the tags table for the dropdown
+      const tagsList = await filesState.fetchAllTags();
       if (!alive) return;
 
-      const tagsList = Array.isArray(summary.tags) ? summary.tags : [];
-      setAvailableTags(tagsList);
+      setAvailableTags(Array.isArray(tagsList) ? tagsList : []);
 
       if (isUntagged) {
         setResolvedTagName('Untagged Files');
         return;
       }
-      const match = tagsList.find(
+      const match = (Array.isArray(tagsList) ? tagsList : []).find(
         (t) => String(t.tag_id || '').toLowerCase() === tagId,
       );
       setResolvedTagName(match?.tag_name || match?.tag_id || decodedTagKey);

@@ -17,19 +17,22 @@ export default function MyFiles() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [targetFolder, setTargetFolder] = useState('');
+  const [allTags, setAllTags] = useState([]);
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       setLoading(true);
       try {
-        const [folderSummary, untagged] = await Promise.all([
+        const [folderSummary, untagged, tags] = await Promise.all([
           filesState.fetchTagFolders(),
           filesState.fetchUntaggedFiles(),
+          filesState.fetchAllTags(),
         ]);
         if (!alive) return;
         setFolders(folderSummary);
         setUntaggedFiles(untagged);
+        setAllTags(tags);
         setSelectedIds(new Set());
       } finally {
         if (alive) setLoading(false);
@@ -205,8 +208,8 @@ export default function MyFiles() {
               }}
             >
               <option value="" disabled>Select a folder...</option>
-              {/* Allow leaving untagged as an option (though they are already untagged here, but user might want to re-confirm or if we reuse this logic) */}
-              {tagFolders.map(tag => (
+              <option value="__untagged__">Untagged (Remove from folder)</option>
+              {allTags.map(tag => (
                 <option key={tag.tag_id} value={tag.tag_id}>
                   {tag.tag_name || tag.tag_id}
                 </option>
