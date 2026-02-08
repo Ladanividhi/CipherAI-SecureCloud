@@ -208,6 +208,7 @@ export default function useFiles(idToken) {
       setBusy(true);
       setStatus('Decrypting file...');
       try {
+        // /decrypt now returns the decrypted file bytes directly (no local disk)
         const res = await authorizedFetch('/decrypt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -216,14 +217,9 @@ export default function useFiles(idToken) {
         if (!res.ok) {
           throw new Error('Decryption failed.');
         }
-        const result = await res.json();
-        decryptedNameRef.current = result.decrypted_filename;
 
-        const downloadRes = await authorizedFetch(`/download/decrypted/${result.decrypted_filename}`);
-        if (!downloadRes.ok) {
-          throw new Error('Unable to load preview.');
-        }
-        const blob = await downloadRes.blob();
+        const blob = await res.blob();
+        decryptedNameRef.current = displayName;
         releasePreview();
         const url = URL.createObjectURL(blob);
         previewObjectUrl.current = url;
@@ -240,7 +236,7 @@ export default function useFiles(idToken) {
           }
         }
 
-        return result.decrypted_filename;
+        return displayName;
       } catch (error) {
         setStatus(error.message || 'Unable to open file.');
         throw error;

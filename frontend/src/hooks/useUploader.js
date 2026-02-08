@@ -256,20 +256,7 @@ export default function useUploader({ idToken, fetchFiles, setSelectedFile, setS
         throw new Error('Upload response missing files.');
       }
 
-      for (const entry of uploadedFiles) {
-        const uploadedName = entry.file_name || entry.stored_filename;
-        if (!uploadedName) continue;
-        setStatus(`Encrypting ${uploadedName}...`);
-        const encryptRes = await authorizedFetch('/encrypt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file_name: uploadedName }),
-        });
-        if (!encryptRes.ok) {
-          throw new Error(`Encryption failed for ${uploadedName}.`);
-        }
-        await encryptRes.json();
-      }
+      // Encryption is now handled server-side during upload — no separate encrypt call needed.
 
       const updated = await fetchFiles();
       if (updated?.files?.length) {

@@ -14,4 +14,4 @@ class FileModel(BaseModel):
     tag_id: str | None = None
     expiry_time: Any | None = None
     advance_security: bool = False
-    aes_key: str 
+    aes_key: str | None = None

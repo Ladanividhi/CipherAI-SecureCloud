@@ -2,26 +2,21 @@ from __future__ import annotations
 
 import base64
 import json
+import mimetypes
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from firebase_admin import firestore
 
 from core.constants import FILES_COLLECTION, MAX_UPLOAD_FILES
 from core.crypto import ensure_rsa_keys
-from core.paths import (
-    DECRYPTED_DIR,
-    ENCRYPTED_DIR,
-    PRIVATE_KEY_PATH,
-    PUBLIC_KEY_PATH,
-    UPLOADS_DIR,
-)
+from core.paths import PRIVATE_KEY_PATH, PUBLIC_KEY_PATH
+from core.s3 import delete_file_objects, download_bytes, upload_bytes
 from core.security import UserContext, get_current_user
-from decrypt_file import decrypt_file
-from encrypt_file import encrypt_file
+from decrypt_file import decrypt_bytes
+from encrypt_file import encrypt_bytes
 from firebase_admin_init import firebase_db
 from models.files import FileModel
 from models.tag import TAGS_COLLECTION
@@ -100,53 +95,47 @@ async def upload_file(
     file: UploadFile = File(...),
     _user: UserContext = Depends(get_current_user),
 ):
+    """Upload a single file: encrypt in memory → store encrypted blob + key in S3."""
+    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
     safe_source_name = sanitize_filename(file.filename or "upload.bin")
-    destination = UPLOADS_DIR / safe_source_name
-
-    if destination.exists():
-        raise HTTPException(status_code=409, detail="A file with this name already exists.")
-
-    with destination.open("wb") as buffer:
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            buffer.write(chunk)
 
     _, doc_ref = _file_doc_ref(_user.uid, safe_source_name)
-    record = FileModel(
-        uid=_user.uid,
-        file_name=safe_source_name,
-        size=destination.stat().st_size,
-        uploaded_at=firestore.SERVER_TIMESTAMP,
-        last_opened_at=None,
-        tag_id=None,
-        expiry_time=None,
-        advance_security=False,
-        aes_key=None,
-    )
-    # Preserve original Firestore field names (including typos used by frontend/backward-compat)
+    if doc_ref.get().exists:
+        raise HTTPException(status_code=409, detail="A file with this name already exists.")
+
+    # Read entire file into memory
+    raw_bytes = await file.read()
+    file_size = len(raw_bytes)
+
+    # Encrypt in memory
+    public_key_pem = PUBLIC_KEY_PATH.read_bytes()
+    encrypted_blob, encrypted_aes_key = encrypt_bytes(raw_bytes, public_key_pem)
+
+    # Upload encrypted blob to S3 (AES key is stored in Firestore only)
+    upload_bytes(_user.uid, safe_source_name, encrypted_blob, suffix=".enc")
+
+    encrypted_aes_key_b64 = base64.b64encode(encrypted_aes_key).decode("ascii")
+
     doc_ref.set(
         {
-            "uid": record.uid,
-            "file_name": record.file_name,
-            "size": record.size,
-            "uploaded_at": record.uploaded_at,
+            "uid": _user.uid,
+            "file_name": safe_source_name,
+            "size": file_size,
+            "uploaded_at": firestore.SERVER_TIMESTAMP,
             "last_opemed_at": None,
-            "tad_id": None,
+            "tag_id": None,
             "expiry_time": None,
-            "advance_seciroty": False,
-            "aes_key": None,
+            "advance_security": False,
+            "aes_key": encrypted_aes_key_b64,
         },
         merge=True,
     )
 
     return {
         "file_name": safe_source_name,
-        "size": destination.stat().st_size,
+        "size": file_size,
         "stored_filename": safe_source_name,
-        "size_bytes": destination.stat().st_size,
-        "directory": "uploads",
+        "size_bytes": file_size,
     }
 
 
@@ -156,6 +145,9 @@ async def upload_files_multiple(
     metadata: str = Form(...),
     _user: UserContext = Depends(get_current_user),
 ):
+    """Upload multiple files: encrypt each in memory → store in S3."""
+    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
+
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
     if len(files) > MAX_UPLOAD_FILES:
@@ -183,6 +175,7 @@ async def upload_files_multiple(
     else:
         raise HTTPException(status_code=400, detail="metadata must be a list or object")
 
+    public_key_pem = PUBLIC_KEY_PATH.read_bytes()
     results: list[Dict[str, Any]] = []
 
     for index, upload in enumerate(files):
@@ -210,41 +203,44 @@ async def upload_files_multiple(
         if isinstance(advance_security_raw, bool):
             advance_security = advance_security_raw
 
-        destination = UPLOADS_DIR / safe_source_name
-        if destination.exists():
+        _, doc_ref = _file_doc_ref(_user.uid, safe_source_name)
+        if doc_ref.get().exists:
             raise HTTPException(
                 status_code=409,
                 detail=f"A file with this name already exists: {safe_source_name}.",
             )
 
-        with destination.open("wb") as buffer:
-            while True:
-                chunk = await upload.read(1024 * 1024)
-                if not chunk:
-                    break
-                buffer.write(chunk)
+        # Read file bytes into memory
+        raw_bytes = await upload.read()
+        file_size = len(raw_bytes)
 
-        _, doc_ref = _file_doc_ref(_user.uid, safe_source_name)
+        # Encrypt in memory
+        encrypted_blob, encrypted_aes_key = encrypt_bytes(raw_bytes, public_key_pem)
+
+        # Upload encrypted blob to S3 (AES key stored in Firestore only)
+        upload_bytes(_user.uid, safe_source_name, encrypted_blob, suffix=".enc")
+
+        encrypted_aes_key_b64 = base64.b64encode(encrypted_aes_key).decode("ascii")
+
         record = {
             "uid": _user.uid,
             "file_name": safe_source_name,
-            "size": destination.stat().st_size,
+            "size": file_size,
             "uploaded_at": firestore.SERVER_TIMESTAMP,
             "last_opemed_at": None,
             "tag_id": tag_id,
             "expiry_time": expiry_time,
             "advance_security": advance_security,
-            "aes_key": None,
+            "aes_key": encrypted_aes_key_b64,
         }
         doc_ref.set(record, merge=True)
 
         results.append(
             {
                 "file_name": safe_source_name,
-                "size": destination.stat().st_size,
+                "size": file_size,
                 "stored_filename": safe_source_name,
-                "size_bytes": destination.stat().st_size,
-                "directory": "uploads",
+                "size_bytes": file_size,
             }
         )
 
@@ -256,47 +252,20 @@ def encrypt_endpoint(
     body: Dict[str, Any] = Body(...),
     _user: UserContext = Depends(get_current_user),
 ):
-    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
+    """No-op kept for backward compatibility.
+
+    Encryption now happens at upload time. This returns a success stub
+    so the frontend's existing upload → encrypt flow doesn't break.
+    """
     request_name = body.get("file_name") or body.get("filename")
     if not isinstance(request_name, str) or not request_name.strip():
         raise HTTPException(status_code=400, detail="file_name is required")
 
-    source_name, doc_ref = _file_doc_ref(_user.uid, request_name)
-
-    if not doc_ref.get().exists:
-        raise HTTPException(status_code=404, detail="File metadata not found for user")
-
-    source_path = UPLOADS_DIR / source_name
-
-    if not source_path.exists():
-        raise HTTPException(status_code=404, detail="Source file not found in uploads")
-
-    encrypted_name = f"{source_name}.enc"
-    encrypted_key_name = f"{source_name}.key"
-
-    encrypted_path = ENCRYPTED_DIR / encrypted_name
-    encrypted_key_path = ENCRYPTED_DIR / encrypted_key_name
-
-    encrypt_file(
-        input_path=source_path,
-        output_path=encrypted_path,
-        public_key_path=PUBLIC_KEY_PATH,
-        encrypted_key_path=encrypted_key_path,
-    )
-
-    encrypted_aes_key_b64 = base64.b64encode(encrypted_key_path.read_bytes()).decode("ascii")
-
-    doc_ref.set(
-        {
-            "aes_key": encrypted_aes_key_b64,
-        },
-        merge=True,
-    )
-
+    source_name = sanitize_filename(request_name)
     return {
-        "encrypted_filename": encrypted_name,
-        "encrypted_key_filename": encrypted_key_name,
-        "directory": "encrypted",
+        "encrypted_filename": f"{source_name}.enc",
+        "encrypted_key_filename": f"{source_name}.key",
+        "message": "Encryption was already performed at upload time.",
     }
 
 
@@ -305,6 +274,10 @@ def decrypt_endpoint(
     body: Dict[str, Any] = Body(...),
     _user: UserContext = Depends(get_current_user),
 ):
+    """Fetch encrypted file + key from S3, decrypt in memory, return the file bytes.
+
+    Flow: S3(encrypted blob) + S3(encrypted AES key) → decrypt_bytes → Response
+    """
     ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
 
     request_name = body.get("file_name") or body.get("filename")
@@ -312,49 +285,49 @@ def decrypt_endpoint(
         raise HTTPException(status_code=400, detail="file_name is required")
 
     base_name = sanitize_filename(request_name)
-    encrypted_name = f"{base_name}.enc"
-
     _, doc_ref = _file_doc_ref(_user.uid, base_name)
-    if not doc_ref.get().exists:
+    doc_snapshot = doc_ref.get()
+    if not doc_snapshot.exists:
         raise HTTPException(status_code=404, detail="File metadata not found for user")
 
-    encrypted_path = ENCRYPTED_DIR / encrypted_name
-    if not encrypted_path.exists():
-        raise HTTPException(status_code=404, detail="Encrypted file not found")
-
-    encrypted_key_path = ENCRYPTED_DIR / f"{base_name}.key"
-
-    doc_snapshot = doc_ref.get()
+    # Retrieve encrypted AES key from Firestore
     doc_payload = doc_snapshot.to_dict() or {}
-    stored_aes_key = doc_payload.get("aes_key")
-    if (not encrypted_key_path.exists()) and stored_aes_key:
-        try:
-            encrypted_key_path.write_bytes(base64.b64decode(stored_aes_key))
-        except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=500, detail="Stored AES key is invalid") from exc
-
-    if not encrypted_key_path.exists():
+    stored_key_b64 = doc_payload.get("aes_key")
+    if not stored_key_b64:
         raise HTTPException(status_code=404, detail="Encrypted AES key not found")
+    try:
+        encrypted_aes_key = base64.b64decode(stored_key_b64)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Stored AES key is invalid") from exc
 
-    output_name = base_name
+    # Download encrypted blob from S3
+    try:
+        encrypted_blob = download_bytes(_user.uid, base_name, suffix=".enc")
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Encrypted file not found in storage")
 
-    output_path = DECRYPTED_DIR / output_name
+    # Decrypt in memory
+    private_key_pem = PRIVATE_KEY_PATH.read_bytes()
+    try:
+        plaintext = decrypt_bytes(encrypted_blob, encrypted_aes_key, private_key_pem)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Decryption failed: {exc}") from exc
 
-    decrypt_file(
-        encrypted_file_path=encrypted_path,
-        encrypted_key_path=encrypted_key_path,
-        output_path=output_path,
-        private_key_path=PRIVATE_KEY_PATH,
-    )
+    # Update last-opened timestamp
+    doc_ref.set({"last_opemed_at": firestore.SERVER_TIMESTAMP}, merge=True)
 
-    doc_ref.set(
-        {
-            "last_opemed_at": firestore.SERVER_TIMESTAMP,
+    # Guess content type for the response
+    content_type, _ = mimetypes.guess_type(base_name)
+    if not content_type:
+        content_type = "application/octet-stream"
+
+    return Response(
+        content=plaintext,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{base_name}"',
         },
-        merge=True,
     )
-
-    return {"decrypted_filename": output_name, "directory": "decrypted"}
 
 
 @router.get("/files/search")
@@ -560,51 +533,49 @@ def tag_folders(_user: UserContext = Depends(get_current_user)):
     }
 
 
-@router.get("/download/{category}/{filename}")
-def download_file(
-    category: str,
+@router.get("/download/{filename}")
+def download_file_endpoint(
     filename: str,
     _user: UserContext = Depends(get_current_user),
 ):
-    directories = {
-        "uploads": UPLOADS_DIR,
-        "encrypted": ENCRYPTED_DIR,
-        "decrypted": DECRYPTED_DIR,
-    }
+    """Download a file: fetch encrypted from S3 → decrypt in memory → return bytes."""
+    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
 
-    if category not in directories:
-        raise HTTPException(status_code=400, detail="Unknown category")
-
-    safe_name = sanitize_filename(filename)
-
-    base_name = safe_name
-    if category == "encrypted" and safe_name.endswith(".enc"):
-        base_name = sanitize_filename(Path(safe_name).stem)
-    elif category == "decrypted":
-        base_name = sanitize_filename(Path(safe_name).name)
+    base_name = sanitize_filename(filename)
 
     _, doc_ref = _file_doc_ref(_user.uid, base_name)
     doc_snapshot = doc_ref.get()
     if not doc_snapshot.exists:
         raise HTTPException(status_code=404, detail="File metadata not found for user")
 
-    doc = doc_snapshot.to_dict() or {}
-    owned_name = doc.get("file_name") or doc.get("filename")
-    expected_name = {
-        "uploads": owned_name,
-        "encrypted": f"{owned_name}.enc" if owned_name else None,
-        "decrypted": owned_name,
-    }.get(category)
+    # Get encrypted AES key from Firestore
+    doc_payload = doc_snapshot.to_dict() or {}
+    stored_key_b64 = doc_payload.get("aes_key")
+    if not stored_key_b64:
+        raise HTTPException(status_code=404, detail="Encrypted AES key not found")
+    encrypted_aes_key = base64.b64decode(stored_key_b64)
 
-    if expected_name != safe_name:
-        raise HTTPException(status_code=403, detail="Access denied for requested file")
+    # Get encrypted blob
+    encrypted_blob = download_bytes(_user.uid, base_name, suffix=".enc")
 
-    file_path = directories[category] / safe_name
+    # Decrypt in memory
+    private_key_pem = PRIVATE_KEY_PATH.read_bytes()
+    try:
+        plaintext = decrypt_bytes(encrypted_blob, encrypted_aes_key, private_key_pem)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Decryption failed: {exc}") from exc
 
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+    content_type, _ = mimetypes.guess_type(base_name)
+    if not content_type:
+        content_type = "application/octet-stream"
 
-    return FileResponse(path=file_path, filename=file_path.name)
+    return Response(
+        content=plaintext,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{base_name}"',
+        },
+    )
 
 
 @router.post("/files/bulk/delete")
@@ -623,33 +594,16 @@ def bulk_delete_files(
         try:
             safe_name = sanitize_filename(name)
             _, doc_ref = _file_doc_ref(_user.uid, safe_name)
-            
-            # Check existence
+
             if not doc_ref.get().exists:
                 continue
 
             # Delete Firestore doc
             doc_ref.delete()
 
-            # Delete physical files
-            for folder in [UPLOADS_DIR, ENCRYPTED_DIR, DECRYPTED_DIR]:
-                # Try deleting main file
-                file_path = folder / safe_name
-                if file_path.exists():
-                    try:
-                        file_path.unlink()
-                    except Exception:
-                        pass
-                
-                # Try deleting .enc or .key variants
-                for ext in [".enc", ".key"]:
-                    variant = folder / f"{safe_name}{ext}"
-                    if variant.exists():
-                        try:
-                            variant.unlink()
-                        except Exception:
-                            pass
-            
+            # Delete S3 objects (.enc and .key)
+            delete_file_objects(_user.uid, safe_name)
+
             deleted_count += 1
         except Exception as e:
             errors.append(f"{name}: {str(e)}")
