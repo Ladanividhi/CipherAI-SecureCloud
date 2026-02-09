@@ -26,7 +26,7 @@ const navLinks = [
   { label: 'AI Assistant', badge: 'NEW', icon: Bot },
   { label: 'Smart Search', icon: Search },
   { label: 'Analytics', icon: PieChart },
-  { label: 'Shared Files', icon: Share2 },
+  { label: 'Shared with me', to: '/shared', icon: Share2 },
   { label: 'Trash Bin', icon: Trash2 },
 ];
 

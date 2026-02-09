@@ -9,6 +9,8 @@ export default function useFiles(idToken) {
   const [busy, setBusy] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [showShareOverlay, setShowShareOverlay] = useState(false);
+  const [shareTargetFile, setShareTargetFile] = useState(null);
 
   const authorizedFetch = useCallback(makeAuthorizedFetch(idToken), [idToken]);
 
@@ -296,33 +298,19 @@ export default function useFiles(idToken) {
   }, [preparePreview, selectedFile]);
 
   const handleShare = useCallback(async (filesToShare = null) => {
-    // If we passed an array, use it; otherwise fallback to selectedFile
+    // If we passed an array, use the first one; otherwise fallback to selectedFile
     const targetFiles = Array.isArray(filesToShare) ? filesToShare : (selectedFile ? [selectedFile] : []);
-
     if (targetFiles.length === 0) return;
 
-    const fileNames = targetFiles.map(f => f.file_name || f.filename);
+    // Open the share overlay for the first file
+    setShareTargetFile(targetFiles[0]);
+    setShowShareOverlay(true);
+  }, [selectedFile]);
 
-    try {
-      const res = await authorizedFetch('/files/bulk/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_names: fileNames }),
-      });
-
-      if (!res.ok) throw new Error("Share failed");
-      const data = await res.json();
-
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(data.share_link);
-        setStatus('Sharable link copied to clipboard!');
-      } else {
-        setStatus('Files shared successfully.');
-      }
-    } catch (error) {
-      setStatus(error.message || 'Unable to share file.');
-    }
-  }, [selectedFile, authorizedFetch]);
+  const closeShareOverlay = useCallback(() => {
+    setShowShareOverlay(false);
+    setShareTargetFile(null);
+  }, []);
 
   const deleteFiles = useCallback(async (filesToDelete) => {
     if (!filesToDelete || filesToDelete.length === 0) return;
@@ -396,5 +384,8 @@ export default function useFiles(idToken) {
     deleteFiles,
     moveFiles,
     authorizedFetch,
+    showShareOverlay,
+    shareTargetFile,
+    closeShareOverlay,
   };
 }

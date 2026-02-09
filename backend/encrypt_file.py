@@ -54,3 +54,48 @@ def encrypt_bytes(
     )
 
     return encrypted_blob, encrypted_aes_key
+
+
+def rewrap_aes_key(
+    encrypted_aes_key: bytes,
+    owner_private_key_pem: bytes,
+    recipient_public_key_pem: bytes,
+) -> bytes:
+    """Decrypt the AES key with the owner's private key, then re-encrypt
+    it with the recipient's public key.
+
+    Parameters
+    ----------
+    encrypted_aes_key:        RSA-OAEP-wrapped AES key (owner-encrypted).
+    owner_private_key_pem:    PEM-encoded RSA private key of the file owner.
+    recipient_public_key_pem: PEM-encoded RSA public key of the share recipient.
+
+    Returns
+    -------
+    The AES key re-wrapped with the recipient's RSA public key.
+    """
+    # Unwrap with owner's private key
+    owner_private_key = serialization.load_pem_private_key(
+        owner_private_key_pem, password=None
+    )
+    aes_key = owner_private_key.decrypt(
+        encrypted_aes_key,
+        asym_padding.OAEP(
+            mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+
+    # Re-wrap with recipient's public key
+    recipient_public_key = serialization.load_pem_public_key(recipient_public_key_pem)
+    rewrapped = recipient_public_key.encrypt(
+        aes_key,
+        asym_padding.OAEP(
+            mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+
+    return rewrapped

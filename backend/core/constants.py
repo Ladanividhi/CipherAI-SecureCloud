@@ -5,6 +5,7 @@ import os
 
 USERS_COLLECTION = "users"
 FILES_COLLECTION = "user_files"
+SHARED_FILES_COLLECTION = "shared_files"
 MAX_UPLOAD_FILES = 15
 
 DEFAULT_ALLOWED_ORIGINS = [

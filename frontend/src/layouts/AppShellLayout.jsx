@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import PreviewOverlay from '../components/PreviewOverlay';
+import ShareOverlay from '../components/ShareOverlay';
 import UploadOverlay from '../components/uploads/UploadOverlay';
 import useAuth from '../hooks/useAuth';
 import useFiles from '../hooks/useFiles';
@@ -80,6 +81,14 @@ export default function AppShellLayout() {
         onShare={filesState.handleShare}
         onClose={filesState.handleClosePreview}
         busy={filesState.busy}
+      />
+
+      <ShareOverlay
+        visible={filesState.showShareOverlay}
+        file={filesState.shareTargetFile}
+        onClose={filesState.closeShareOverlay}
+        authorizedFetch={filesState.authorizedFetch}
+        onStatus={filesState.setStatus}
       />
     </>
   );

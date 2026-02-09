@@ -10,13 +10,13 @@ from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadF
 from fastapi.responses import Response
 from firebase_admin import firestore
 
-from core.constants import FILES_COLLECTION, MAX_UPLOAD_FILES
+from core.constants import FILES_COLLECTION, MAX_UPLOAD_FILES, SHARED_FILES_COLLECTION
 from core.crypto import ensure_rsa_keys
 from core.paths import PRIVATE_KEY_PATH, PUBLIC_KEY_PATH
 from core.s3 import delete_file_objects, download_bytes, upload_bytes
 from core.security import UserContext, get_current_user
 from decrypt_file import decrypt_bytes
-from encrypt_file import encrypt_bytes
+from encrypt_file import encrypt_bytes, rewrap_aes_key
 from firebase_admin_init import firebase_db
 from models.files import FileModel
 from models.tag import TAGS_COLLECTION
@@ -658,3 +658,350 @@ def bulk_share_files(
         raise HTTPException(status_code=400, detail="No files selected")
 
     return {"message": f"Successfully prepared {len(file_names)} files for sharing.", "share_link": "https://securecloud.app/share/mock-link-123"}
+
+
+# ─── Sharing Endpoints ─────────────────────────────────────────────────────────
+
+@router.get("/users/search")
+def search_users(q: str = "", _user: UserContext = Depends(get_current_user)):
+    """Search registered users by email. Only returns users other than the caller."""
+    query_str = (q or "").strip().lower()
+    if not query_str or len(query_str) < 2:
+        return {"users": []}
+
+    all_users = firebase_db.collection("users").stream()
+    results = []
+    for doc in all_users:
+        data = doc.to_dict() or {}
+        email = (data.get("email") or "").lower()
+        if email and query_str in email and doc.id != _user.uid:
+            results.append({
+                "uid": doc.id,
+                "email": data.get("email", ""),
+                "name": data.get("name") or data.get("display_name") or "",
+            })
+        if len(results) >= 10:
+            break
+    return {"users": results}
+
+
+@router.post("/files/share")
+def share_file(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    """Share a file with another registered user.
+
+    - Decrypts the AES key with the owner's private key
+    - Re-encrypts it with the recipient's public key
+    - Stores the share record in the shared_files collection
+    """
+    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
+
+    file_name = body.get("file_name")
+    recipient_email = (body.get("recipient_email") or "").strip().lower()
+    permission = body.get("permission", "view")  # "view" or "download"
+    expiry_time_raw = body.get("expiry_time")
+
+    if not file_name:
+        raise HTTPException(status_code=400, detail="file_name is required")
+    if not recipient_email:
+        raise HTTPException(status_code=400, detail="recipient_email is required")
+    if permission not in ("view", "download"):
+        raise HTTPException(status_code=400, detail="permission must be 'view' or 'download'")
+
+    # Look up recipient by email
+    users_query = firebase_db.collection("users").where("email", "==", recipient_email).limit(1).stream()
+    recipient_doc = None
+    for doc in users_query:
+        recipient_doc = doc
+        break
+
+    if not recipient_doc:
+        raise HTTPException(status_code=404, detail="No registered user found with that email")
+
+    recipient_data = recipient_doc.to_dict() or {}
+    recipient_uid = recipient_doc.id
+    recipient_public_key_pem = recipient_data.get("public_key")
+
+    if recipient_uid == _user.uid:
+        raise HTTPException(status_code=400, detail="You cannot share a file with yourself")
+
+    if not recipient_public_key_pem:
+        raise HTTPException(
+            status_code=400,
+            detail="Recipient does not have a public key registered"
+        )
+
+    # Load the file metadata (owner's file)
+    safe_name = sanitize_filename(file_name)
+    _, doc_ref = _file_doc_ref(_user.uid, safe_name)
+    doc_snapshot = doc_ref.get()
+    if not doc_snapshot.exists:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    doc_payload = doc_snapshot.to_dict() or {}
+    stored_key_b64 = doc_payload.get("aes_key")
+    if not stored_key_b64:
+        raise HTTPException(status_code=404, detail="Encrypted AES key not found for file")
+
+    # Check if already shared with this user
+    existing_shares = (
+        firebase_db.collection(SHARED_FILES_COLLECTION)
+        .where("owner_id", "==", _user.uid)
+        .where("shared_user_id", "==", recipient_uid)
+        .where("file_id", "==", f"{_user.uid}:{safe_name}")
+        .stream()
+    )
+    for existing in existing_shares:
+        raise HTTPException(
+            status_code=409,
+            detail="This file is already shared with that user"
+        )
+
+    # Rewrap the AES key: owner_private → recipient_public
+    try:
+        encrypted_aes_key = base64.b64decode(stored_key_b64)
+        owner_private_key_pem = PRIVATE_KEY_PATH.read_bytes()
+        recipient_pub_bytes = recipient_public_key_pem.encode("utf-8") if isinstance(
+            recipient_public_key_pem, str
+        ) else recipient_public_key_pem
+
+        rewrapped_key = rewrap_aes_key(
+            encrypted_aes_key,
+            owner_private_key_pem,
+            recipient_pub_bytes,
+        )
+        rewrapped_key_b64 = base64.b64encode(rewrapped_key).decode("ascii")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to re-encrypt AES key for recipient: {exc}"
+        ) from exc
+
+    # Parse optional expiry
+    expiry_time = _parse_expiry(expiry_time_raw)
+
+    # Store the share record
+    share_data = {
+        "owner_id": _user.uid,
+        "shared_user_id": recipient_uid,
+        "file_id": f"{_user.uid}:{safe_name}",
+        "aes_key_shared": rewrapped_key_b64,
+        "permissions": permission,
+        "sharedExpiryTime": expiry_time,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+    }
+    firebase_db.collection(SHARED_FILES_COLLECTION).add(share_data)
+
+    return {
+        "message": f"File '{safe_name}' shared with {recipient_email}",
+        "permission": permission,
+    }
+
+
+@router.get("/files/shared-with-me")
+def files_shared_with_me(_user: UserContext = Depends(get_current_user)):
+    """Return all files shared with the current user."""
+    shares = (
+        firebase_db.collection(SHARED_FILES_COLLECTION)
+        .where("shared_user_id", "==", _user.uid)
+        .stream()
+    )
+    items = []
+    for doc in shares:
+        data = doc.to_dict() or {}
+        file_id = data.get("file_id", "")
+
+        # Check expiry
+        expiry = data.get("sharedExpiryTime")
+        if expiry is not None:
+            if isinstance(expiry, datetime):
+                if expiry < datetime.now(expiry.tzinfo):
+                    continue  # skip expired shares
+            elif hasattr(expiry, "timestamp"):
+                # Firestore DatetimeWithNanoseconds
+                from datetime import timezone
+                if expiry.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+                    continue
+
+        # Fetch original file metadata
+        file_doc = firebase_db.collection(FILES_COLLECTION).document(file_id).get()
+        file_data = file_doc.to_dict() if file_doc.exists else {}
+
+        # Fetch owner info
+        owner_id = data.get("owner_id", "")
+        owner_email = ""
+        owner_name = ""
+        if owner_id:
+            owner_doc = firebase_db.collection("users").document(owner_id).get()
+            if owner_doc.exists:
+                owner_data = owner_doc.to_dict() or {}
+                owner_email = owner_data.get("email", "")
+                owner_name = owner_data.get("name", "")
+
+        items.append({
+            "share_id": doc.id,
+            "file_id": file_id,
+            "file_name": file_data.get("file_name", file_id.split(":")[-1] if ":" in file_id else file_id),
+            "size": file_data.get("size", 0),
+            "owner_id": owner_id,
+            "owner_email": owner_email,
+            "owner_name": owner_name,
+            "permissions": data.get("permissions", "view"),
+            "sharedExpiryTime": _serialize_timestamp(data.get("sharedExpiryTime")),
+            "createdAt": _serialize_timestamp(data.get("createdAt")),
+        })
+
+    return {"files": items}
+
+
+@router.post("/files/shared/decrypt")
+def decrypt_shared_file(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    """Decrypt a file that was shared with the current user.
+
+    Uses the re-wrapped AES key (encrypted with user's public key) from the
+    shared_files record to decrypt the original file blob from S3.
+    """
+    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
+
+    share_id = body.get("share_id")
+    if not share_id:
+        raise HTTPException(status_code=400, detail="share_id is required")
+
+    # Load the share record
+    share_ref = firebase_db.collection(SHARED_FILES_COLLECTION).document(share_id)
+    share_snapshot = share_ref.get()
+    if not share_snapshot.exists:
+        raise HTTPException(status_code=404, detail="Share record not found")
+
+    share_data = share_snapshot.to_dict() or {}
+
+    # Verify this share belongs to the current user
+    if share_data.get("shared_user_id") != _user.uid:
+        raise HTTPException(status_code=403, detail="You do not have access to this shared file")
+
+    # Check expiry
+    expiry = share_data.get("sharedExpiryTime")
+    if expiry is not None:
+        if isinstance(expiry, datetime):
+            if expiry < datetime.now(expiry.tzinfo):
+                raise HTTPException(status_code=403, detail="This share has expired")
+        elif hasattr(expiry, "timestamp"):
+            from datetime import timezone
+            if expiry.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+                raise HTTPException(status_code=403, detail="This share has expired")
+
+    # Get the re-wrapped AES key
+    shared_key_b64 = share_data.get("aes_key_shared")
+    if not shared_key_b64:
+        raise HTTPException(status_code=500, detail="Shared AES key not found")
+
+    try:
+        encrypted_aes_key = base64.b64decode(shared_key_b64)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Shared AES key is invalid") from exc
+
+    # Get original file info to find the S3 path (owner_uid + filename)
+    file_id = share_data.get("file_id", "")
+    if ":" not in file_id:
+        raise HTTPException(status_code=500, detail="Invalid file reference")
+
+    owner_uid, base_name = file_id.split(":", 1)
+
+    # Download encrypted blob from S3 using owner's path
+    try:
+        encrypted_blob = download_bytes(owner_uid, base_name, suffix=".enc")
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Encrypted file not found in storage")
+
+    # Decrypt in memory using the user's private key
+    private_key_pem = PRIVATE_KEY_PATH.read_bytes()
+    try:
+        plaintext = decrypt_bytes(encrypted_blob, encrypted_aes_key, private_key_pem)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Decryption failed: {exc}") from exc
+
+    content_type, _ = mimetypes.guess_type(base_name)
+    if not content_type:
+        content_type = "application/octet-stream"
+
+    permission = share_data.get("permissions", "view")
+    disposition = "attachment" if permission == "download" else "inline"
+
+    return Response(
+        content=plaintext,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{base_name}"',
+            "X-Share-Permission": permission,
+        },
+    )
+
+
+@router.get("/files/shared/download/{share_id}")
+def download_shared_file(
+    share_id: str,
+    _user: UserContext = Depends(get_current_user),
+):
+    """Download a shared file — only allowed if permission is 'download'."""
+    ensure_rsa_keys(PUBLIC_KEY_PATH, PRIVATE_KEY_PATH)
+
+    share_ref = firebase_db.collection(SHARED_FILES_COLLECTION).document(share_id)
+    share_snapshot = share_ref.get()
+    if not share_snapshot.exists:
+        raise HTTPException(status_code=404, detail="Share record not found")
+
+    share_data = share_snapshot.to_dict() or {}
+
+    if share_data.get("shared_user_id") != _user.uid:
+        raise HTTPException(status_code=403, detail="You do not have access to this shared file")
+
+    if share_data.get("permissions") != "download":
+        raise HTTPException(status_code=403, detail="You only have view permission for this file")
+
+    # Check expiry
+    expiry = share_data.get("sharedExpiryTime")
+    if expiry is not None:
+        if isinstance(expiry, datetime):
+            if expiry < datetime.now(expiry.tzinfo):
+                raise HTTPException(status_code=403, detail="This share has expired")
+        elif hasattr(expiry, "timestamp"):
+            from datetime import timezone
+            if expiry.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+                raise HTTPException(status_code=403, detail="This share has expired")
+
+    shared_key_b64 = share_data.get("aes_key_shared")
+    if not shared_key_b64:
+        raise HTTPException(status_code=500, detail="Shared AES key not found")
+
+    encrypted_aes_key = base64.b64decode(shared_key_b64)
+
+    file_id = share_data.get("file_id", "")
+    if ":" not in file_id:
+        raise HTTPException(status_code=500, detail="Invalid file reference")
+
+    owner_uid, base_name = file_id.split(":", 1)
+
+    encrypted_blob = download_bytes(owner_uid, base_name, suffix=".enc")
+
+    private_key_pem = PRIVATE_KEY_PATH.read_bytes()
+    try:
+        plaintext = decrypt_bytes(encrypted_blob, encrypted_aes_key, private_key_pem)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Decryption failed: {exc}") from exc
+
+    content_type, _ = mimetypes.guess_type(base_name)
+    if not content_type:
+        content_type = "application/octet-stream"
+
+    return Response(
+        content=plaintext,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{base_name}"',
+        },
+    )
