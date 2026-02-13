@@ -25,9 +25,8 @@ const navLinks = [
   { label: 'My Files', badge: null, to: '/my-files', icon: FolderOpen },
   { label: 'AI Assistant', badge: 'NEW', icon: Bot },
   { label: 'Smart Search', icon: Search },
-  { label: 'Analytics', icon: PieChart },
+  { label: 'Analytics', to: '/analytics', icon: PieChart },
   { label: 'Shared with me', to: '/shared', icon: Share2 },
-  { label: 'Trash Bin', icon: Trash2 },
 ];
 
 export default function Sidebar({ profile, onLogout, storage }) {
@@ -41,7 +40,7 @@ export default function Sidebar({ profile, onLogout, storage }) {
   };
 
   const fallbackPercent = (fallbackUser.storageUsed / fallbackUser.storageQuota) * 100;
-  const storageLabel = storage?.label || `${fallbackUser.storageUsed}GB of ${fallbackUser.storageQuota}GB`;
+  const storageLabel = storage?.label || `${fallbackUser.storageUsed}MB of ${fallbackUser.storageQuota}MB`;
   const storagePercent = typeof storage?.percent === 'number' ? storage.percent : fallbackPercent;
 
   return (
@@ -78,7 +77,7 @@ export default function Sidebar({ profile, onLogout, storage }) {
         ))}
       </nav>
       <div className="sidebar-actions">
-        <button className="settings-btn" type="button">
+        <button className="settings-btn" type="button" onClick={() => navigate('/settings')}>
           <Settings size={18} style={{ marginRight: '8px' }} />
           Settings
         </button>

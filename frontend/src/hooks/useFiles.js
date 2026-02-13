@@ -27,15 +27,15 @@ export default function useFiles(idToken) {
   useEffect(() => () => releasePreview(), [releasePreview]);
 
   const storageUsage = useMemo(() => {
-    const quotaGb = 100;
+    const quotaMb = 100;
     const usedBytes = files.reduce((total, file) => total + (file.size ?? file.size_bytes ?? 0), 0);
-    const usedGb = usedBytes / 1024 ** 3;
-    const percent = quotaGb ? Math.min((usedGb / quotaGb) * 100, 100) : 0;
+    const usedMb = usedBytes / 1024 ** 2;
+    const percent = quotaMb ? Math.min((usedMb / quotaMb) * 100, 100) : 0;
     return {
-      label: `${usedGb.toFixed(2)} GB of ${quotaGb} GB`,
+      label: `${usedMb.toFixed(2)} MB of ${quotaMb} MB`,
       percent,
-      usedGb,
-      quotaGb,
+      usedMb,
+      quotaMb,
       usedBytes,
     };
   }, [files]);

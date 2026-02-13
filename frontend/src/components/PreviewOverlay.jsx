@@ -1,4 +1,5 @@
 import React from 'react';
+import { Maximize2 } from 'lucide-react';
 import StatusPill from './StatusPill';
 import { formatBytes, formatDate } from '../utils/formatters';
 
@@ -50,7 +51,11 @@ export default function PreviewOverlay({ visible, file, previewUrl, status, onDo
     }
 
     if (isPdf) {
-      return <iframe src={previewUrl} title={file.file_name || file.filename} />;
+      return (
+        <div className="pdf-no-toolbar">
+          <iframe src={previewUrl} title={file.file_name || file.filename} />
+        </div>
+      );
     }
 
     if (isImage) {
@@ -76,6 +81,17 @@ export default function PreviewOverlay({ visible, file, previewUrl, status, onDo
             </small>
           </div>
           <div className="preview-actions">
+            {previewUrl && (isPdf || isImage) && (
+              <button
+                className="fullpreview-btn"
+                type="button"
+                title="Full Preview"
+                onClick={() => window.open(previewUrl, '_blank')}
+              >
+                <Maximize2 size={16} style={{ marginRight: '6px' }} />
+                Full Preview
+              </button>
+            )}
             <button className="share-btn" type="button" onClick={onShare} disabled={busy}>Share</button>
             <button className="download-btn" type="button" onClick={onDownload} disabled={busy}>
               {busy && !previewUrl ? 'Preparing...' : 'Download'}

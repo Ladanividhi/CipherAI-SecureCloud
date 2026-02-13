@@ -20,6 +20,7 @@ from encrypt_file import encrypt_bytes, rewrap_aes_key
 from firebase_admin_init import firebase_db
 from models.files import FileModel
 from models.tag import TAGS_COLLECTION
+from services.email_service import send_share_notification
 
 
 router = APIRouter(tags=["files"])
@@ -794,9 +795,19 @@ def share_file(
     }
     firebase_db.collection(SHARED_FILES_COLLECTION).add(share_data)
 
+    # Send email notification (non-blocking; failures don't affect the share)
+    email_sent = send_share_notification(
+        recipient_email=recipient_email,
+        sharer_name=_user.name,
+        sharer_email=_user.email,
+        file_name=safe_name,
+        permission=permission,
+    )
+
     return {
         "message": f"File '{safe_name}' shared with {recipient_email}",
         "permission": permission,
+        "email_sent": email_sent,
     }
 
 
@@ -895,16 +906,6 @@ def decrypt_shared_file(
             if expiry.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
                 raise HTTPException(status_code=403, detail="This share has expired")
 
-    # Get the re-wrapped AES key
-    shared_key_b64 = share_data.get("aes_key_shared")
-    if not shared_key_b64:
-        raise HTTPException(status_code=500, detail="Shared AES key not found")
-
-    try:
-        encrypted_aes_key = base64.b64decode(shared_key_b64)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail="Shared AES key is invalid") from exc
-
     # Get original file info to find the S3 path (owner_uid + filename)
     file_id = share_data.get("file_id", "")
     if ":" not in file_id:
@@ -912,13 +913,31 @@ def decrypt_shared_file(
 
     owner_uid, base_name = file_id.split(":", 1)
 
+    # Retrieve the ORIGINAL AES key from the owner's file document.
+    # This avoids key-mismatch issues with the re-wrapped key when the
+    # server key-pair was regenerated or the recipient's stored public
+    # key was stale at share time.
+    file_doc = firebase_db.collection(FILES_COLLECTION).document(file_id).get()
+    if not file_doc.exists:
+        raise HTTPException(status_code=404, detail="Original file metadata not found")
+
+    file_data = file_doc.to_dict() or {}
+    original_key_b64 = file_data.get("aes_key")
+    if not original_key_b64:
+        raise HTTPException(status_code=500, detail="AES key not found for file")
+
+    try:
+        encrypted_aes_key = base64.b64decode(original_key_b64)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Stored AES key is invalid") from exc
+
     # Download encrypted blob from S3 using owner's path
     try:
         encrypted_blob = download_bytes(owner_uid, base_name, suffix=".enc")
     except HTTPException:
         raise HTTPException(status_code=404, detail="Encrypted file not found in storage")
 
-    # Decrypt in memory using the user's private key
+    # Decrypt in memory using the server's private key
     private_key_pem = PRIVATE_KEY_PATH.read_bytes()
     try:
         plaintext = decrypt_bytes(encrypted_blob, encrypted_aes_key, private_key_pem)
@@ -974,17 +993,23 @@ def download_shared_file(
             if expiry.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
                 raise HTTPException(status_code=403, detail="This share has expired")
 
-    shared_key_b64 = share_data.get("aes_key_shared")
-    if not shared_key_b64:
-        raise HTTPException(status_code=500, detail="Shared AES key not found")
-
-    encrypted_aes_key = base64.b64decode(shared_key_b64)
-
     file_id = share_data.get("file_id", "")
     if ":" not in file_id:
         raise HTTPException(status_code=500, detail="Invalid file reference")
 
     owner_uid, base_name = file_id.split(":", 1)
+
+    # Use the original AES key from the owner's file document
+    file_doc = firebase_db.collection(FILES_COLLECTION).document(file_id).get()
+    if not file_doc.exists:
+        raise HTTPException(status_code=404, detail="Original file metadata not found")
+
+    file_data = file_doc.to_dict() or {}
+    original_key_b64 = file_data.get("aes_key")
+    if not original_key_b64:
+        raise HTTPException(status_code=500, detail="AES key not found for file")
+
+    encrypted_aes_key = base64.b64decode(original_key_b64)
 
     encrypted_blob = download_bytes(owner_uid, base_name, suffix=".enc")
 

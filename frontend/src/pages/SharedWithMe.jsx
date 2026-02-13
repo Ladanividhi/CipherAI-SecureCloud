@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Share2, Eye, Download, X, FileText, Image as ImageIcon, Music, Video, Code, FileArchive, File, Clock, User } from 'lucide-react';
+import { Share2, Eye, Download, X, FileText, Image as ImageIcon, Music, Video, Code, FileArchive, File, Clock, User, Maximize2 } from 'lucide-react';
 import { formatBytes, formatDate } from '../utils/formatters';
 
 const getFileIcon = (filename) => {
@@ -133,7 +133,11 @@ export default function SharedWithMe() {
     const isPdf = lowerName.endsWith('.pdf');
     const isImage = /(png|jpe?g|gif|webp)$/i.test(lowerName);
 
-    if (isPdf) return <iframe src={previewUrl} title={previewFile.file_name} />;
+    if (isPdf) return (
+      <div className="pdf-no-toolbar">
+        <iframe src={previewUrl} title={previewFile.file_name} />
+      </div>
+    );
     if (isImage) return <img src={previewUrl} alt={previewFile.file_name} />;
 
     return (
@@ -234,6 +238,20 @@ export default function SharedWithMe() {
                 </small>
               </div>
               <div className="preview-actions">
+                {previewUrl && (() => {
+                  const ln = (previewFile.file_name || '').toLowerCase();
+                  return ln.endsWith('.pdf') || /(png|jpe?g|gif|webp)$/i.test(ln);
+                })() && (
+                  <button
+                    className="fullpreview-btn"
+                    type="button"
+                    title="Full Preview"
+                    onClick={() => window.open(previewUrl, '_blank')}
+                  >
+                    <Maximize2 size={16} style={{ marginRight: '6px' }} />
+                    Full Preview
+                  </button>
+                )}
                 {previewFile.permissions === 'download' && (
                   <button
                     className="download-btn"

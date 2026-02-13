@@ -9,6 +9,8 @@ import AppShellLayout from './layouts/AppShellLayout';
 import MyFiles from './pages/MyFiles';
 import TagFiles from './pages/TagFiles';
 import SharedWithMe from './pages/SharedWithMe';
+import Settings from './pages/Settings';
+import Analytics from './pages/Analytics';
 
 function ProtectedRoute({ children }) {
   const { authReady, currentUser } = useAuth();
@@ -44,6 +46,8 @@ export default function AppRoutes() {
         <Route path="/my-files" element={<MyFiles />} />
         <Route path="/my-files/:tagName" element={<TagFiles />} />
         <Route path="/shared" element={<SharedWithMe />} />
+        <Route path="/analytics" element={<Analytics />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
       <Route
         path="/preview"

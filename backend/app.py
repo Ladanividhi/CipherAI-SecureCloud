@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.constants import ALLOWED_ORIGINS
 from routes.auth import router as auth_router
 from routes.files import router as files_router
+from routes.analytics import router as analytics_router
 
 
 app = FastAPI(title="Secure File Service", version="1.0.0")
@@ -25,6 +26,7 @@ app.add_middleware(
 # Register routers (endpoints remain unchanged)
 app.include_router(auth_router)
 app.include_router(files_router)
+app.include_router(analytics_router)
 
 if __name__ == "__main__":
     import uvicorn
