@@ -353,6 +353,65 @@ export default function useFiles(idToken) {
     }
   }, [authorizedFetch, fetchFiles, fetchTagFolders]);
 
+  const extendFileExpiry = useCallback(async (fileName, newExpiry) => {
+    setBusy(true);
+    try {
+      const res = await authorizedFetch('/files/extend-expiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_name: fileName, new_expiry: newExpiry }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to extend expiry');
+      }
+      const data = await res.json();
+      setStatus(data.message || 'Expiry extended.');
+      // Refresh files & update selected
+      const refreshed = await fetchFiles();
+      if (refreshed?.files && selectedFile) {
+        const displayName = selectedFile.file_name || selectedFile.filename;
+        const updated = refreshed.files.find(f => (f.file_name || f.filename) === displayName);
+        if (updated) setSelectedFile(updated);
+      }
+      return data;
+    } catch (e) {
+      setStatus(e.message);
+      throw e;
+    } finally {
+      setBusy(false);
+    }
+  }, [authorizedFetch, fetchFiles, selectedFile]);
+
+  const removeFileExpiry = useCallback(async (fileName) => {
+    setBusy(true);
+    try {
+      const res = await authorizedFetch('/files/remove-expiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_name: fileName }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to remove expiry');
+      }
+      const data = await res.json();
+      setStatus(data.message || 'Expiry removed.');
+      const refreshed = await fetchFiles();
+      if (refreshed?.files && selectedFile) {
+        const displayName = selectedFile.file_name || selectedFile.filename;
+        const updated = refreshed.files.find(f => (f.file_name || f.filename) === displayName);
+        if (updated) setSelectedFile(updated);
+      }
+      return data;
+    } catch (e) {
+      setStatus(e.message);
+      throw e;
+    } finally {
+      setBusy(false);
+    }
+  }, [authorizedFetch, fetchFiles, selectedFile]);
+
   return {
     files,
     setFiles,
@@ -383,6 +442,8 @@ export default function useFiles(idToken) {
     handleShare,
     deleteFiles,
     moveFiles,
+    extendFileExpiry,
+    removeFileExpiry,
     authorizedFetch,
     showShareOverlay,
     shareTargetFile,

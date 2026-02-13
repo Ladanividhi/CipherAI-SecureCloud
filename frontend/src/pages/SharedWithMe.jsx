@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Share2, Eye, Download, X, FileText, Image as ImageIcon, Music, Video, Code, FileArchive, File, Clock, User, Maximize2 } from 'lucide-react';
+import { Share2, Eye, Download, X, FileText, Image as ImageIcon, Music, Video, Code, FileArchive, File, Clock, User, Maximize2, CalendarPlus } from 'lucide-react';
 import { formatBytes, formatDate } from '../utils/formatters';
 
 const getFileIcon = (filename) => {
@@ -28,6 +28,7 @@ export default function SharedWithMe() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
   const previewObjectUrl = useRef('');
+  const [extendRequesting, setExtendRequesting] = useState(null); // share_id being requested
 
   const releasePreview = useCallback(() => {
     if (previewObjectUrl.current) {
@@ -114,6 +115,28 @@ export default function SharedWithMe() {
     setPreviewUrl('');
     releasePreview();
   }, [releasePreview]);
+
+  // Request owner to extend expiry on a shared file
+  const handleRequestExtend = useCallback(async (shareId, e) => {
+    if (e) e.stopPropagation();
+    setExtendRequesting(shareId);
+    try {
+      const res = await authorizedFetch('/files/shared/request-extend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ share_id: shareId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to send extend request');
+      }
+      filesState.setStatus('Extension request sent to the file owner.');
+    } catch (err) {
+      filesState.setStatus(err.message);
+    } finally {
+      setExtendRequesting(null);
+    }
+  }, [authorizedFetch, filesState]);
 
   // Filter by search
   const normalizedSearch = search.trim().toLowerCase();
@@ -215,6 +238,18 @@ export default function SharedWithMe() {
                     <Clock size={12} /> Expires {formatDate(file.sharedExpiryTime)}
                   </span>
                 )}
+                {file.sharedExpiryTime && (
+                  <button
+                    className="shared-extend-btn"
+                    type="button"
+                    title="Request owner to extend expiry"
+                    disabled={extendRequesting === file.share_id}
+                    onClick={(e) => handleRequestExtend(file.share_id, e)}
+                  >
+                    <CalendarPlus size={12} />
+                    {extendRequesting === file.share_id ? 'Sending...' : 'Request Extension'}
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -260,6 +295,18 @@ export default function SharedWithMe() {
                     disabled={previewBusy}
                   >
                     Download
+                  </button>
+                )}
+                {previewFile.sharedExpiryTime && (
+                  <button
+                    className="shared-extend-btn"
+                    type="button"
+                    title="Request owner to extend expiry"
+                    disabled={extendRequesting === previewFile.share_id}
+                    onClick={() => handleRequestExtend(previewFile.share_id)}
+                  >
+                    <CalendarPlus size={14} />
+                    {extendRequesting === previewFile.share_id ? 'Sending...' : 'Request Extension'}
                   </button>
                 )}
                 <button className="preview-close-btn" type="button" onClick={closePreview}>Close</button>

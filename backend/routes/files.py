@@ -20,7 +20,7 @@ from encrypt_file import encrypt_bytes, rewrap_aes_key
 from firebase_admin_init import firebase_db
 from models.files import FileModel
 from models.tag import TAGS_COLLECTION
-from services.email_service import send_share_notification
+from services.email_service import send_share_notification, send_extend_request_to_owner
 
 
 router = APIRouter(tags=["files"])
@@ -1030,3 +1030,208 @@ def download_shared_file(
             "Content-Disposition": f'attachment; filename="{base_name}"',
         },
     )
+
+
+# ─── Expiry Extension Endpoints ─────────────────────────────────────────────
+
+
+@router.post("/files/extend-expiry")
+def extend_file_expiry(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    """Extend or update the expiry time of an owned file."""
+    file_name = body.get("file_name")
+    new_expiry = body.get("new_expiry")
+
+    if not file_name:
+        raise HTTPException(status_code=400, detail="file_name is required")
+    if not new_expiry:
+        raise HTTPException(status_code=400, detail="new_expiry is required")
+
+    safe_name = sanitize_filename(file_name)
+    _, doc_ref = _file_doc_ref(_user.uid, safe_name)
+    doc_snapshot = doc_ref.get()
+    if not doc_snapshot.exists:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    parsed_expiry = _parse_expiry(new_expiry)
+    if parsed_expiry is None:
+        raise HTTPException(status_code=400, detail="Invalid expiry time format")
+
+    # Reset the warning flag so a new warning can be sent if needed
+    doc_ref.set({
+        "expiry_time": parsed_expiry,
+        "expiry_warning_sent": False,
+    }, merge=True)
+
+    return {
+        "message": f"Expiry time for '{safe_name}' has been updated.",
+        "file_name": safe_name,
+        "new_expiry": parsed_expiry.isoformat() if isinstance(parsed_expiry, datetime) else str(parsed_expiry),
+    }
+
+
+@router.post("/files/remove-expiry")
+def remove_file_expiry(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    """Remove the expiry time from an owned file (make it permanent)."""
+    file_name = body.get("file_name")
+    if not file_name:
+        raise HTTPException(status_code=400, detail="file_name is required")
+
+    safe_name = sanitize_filename(file_name)
+    _, doc_ref = _file_doc_ref(_user.uid, safe_name)
+    doc_snapshot = doc_ref.get()
+    if not doc_snapshot.exists:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    doc_ref.set({
+        "expiry_time": None,
+        "expiry_warning_sent": False,
+    }, merge=True)
+
+    return {
+        "message": f"Expiry removed for '{safe_name}'. File is now permanent.",
+        "file_name": safe_name,
+    }
+
+
+@router.post("/files/shared/extend-expiry")
+def extend_shared_file_expiry(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    """Extend the expiry time of a shared file record.
+
+    Only the owner of the file can extend the shared expiry.
+    """
+    share_id = body.get("share_id")
+    new_expiry = body.get("new_expiry")
+
+    if not share_id:
+        raise HTTPException(status_code=400, detail="share_id is required")
+    if not new_expiry:
+        raise HTTPException(status_code=400, detail="new_expiry is required")
+
+    share_ref = firebase_db.collection(SHARED_FILES_COLLECTION).document(share_id)
+    share_snapshot = share_ref.get()
+    if not share_snapshot.exists:
+        raise HTTPException(status_code=404, detail="Share record not found")
+
+    share_data = share_snapshot.to_dict() or {}
+
+    # Only the owner can extend
+    if share_data.get("owner_id") != _user.uid:
+        raise HTTPException(status_code=403, detail="Only the file owner can extend the shared expiry")
+
+    parsed_expiry = _parse_expiry(new_expiry)
+    if parsed_expiry is None:
+        raise HTTPException(status_code=400, detail="Invalid expiry time format")
+
+    share_ref.set({
+        "sharedExpiryTime": parsed_expiry,
+        "expiry_warning_sent": False,
+    }, merge=True)
+
+    file_id = share_data.get("file_id", "")
+    file_name = file_id.split(":")[-1] if ":" in file_id else file_id
+
+    return {
+        "message": f"Shared expiry for '{file_name}' has been updated.",
+        "share_id": share_id,
+        "new_expiry": parsed_expiry.isoformat() if isinstance(parsed_expiry, datetime) else str(parsed_expiry),
+    }
+
+
+@router.post("/files/shared/request-extend")
+def request_extend_shared_file(
+    body: Dict[str, Any] = Body(...),
+    _user: UserContext = Depends(get_current_user),
+):
+    """Shared user requests the owner to extend the expiry.
+
+    Sends an email to the file owner.
+    """
+    share_id = body.get("share_id")
+
+    if not share_id:
+        raise HTTPException(status_code=400, detail="share_id is required")
+
+    share_ref = firebase_db.collection(SHARED_FILES_COLLECTION).document(share_id)
+    share_snapshot = share_ref.get()
+    if not share_snapshot.exists:
+        raise HTTPException(status_code=404, detail="Share record not found")
+
+    share_data = share_snapshot.to_dict() or {}
+
+    # Verify this share belongs to the requester
+    if share_data.get("shared_user_id") != _user.uid:
+        raise HTTPException(status_code=403, detail="You do not have access to this shared file")
+
+    owner_uid = share_data.get("owner_id", "")
+    file_id = share_data.get("file_id", "")
+    file_name = file_id.split(":")[-1] if ":" in file_id else file_id
+
+    # Get owner email
+    owner_email = ""
+    if owner_uid:
+        owner_doc = firebase_db.collection("users").document(owner_uid).get()
+        if owner_doc.exists:
+            owner_data = owner_doc.to_dict() or {}
+            owner_email = owner_data.get("email", "")
+
+    if not owner_email:
+        raise HTTPException(status_code=404, detail="Could not find the file owner's email")
+
+    requester_email = _user.email or ""
+
+    email_sent = send_extend_request_to_owner(
+        owner_email=owner_email,
+        requester_email=requester_email,
+        file_name=file_name,
+    )
+
+    return {
+        "message": "Extension request sent to the file owner.",
+        "email_sent": email_sent,
+        "owner_email": owner_email,
+    }
+
+
+@router.get("/files/shared-by-me")
+def files_shared_by_me(_user: UserContext = Depends(get_current_user)):
+    """Return all share records created by the current user (files they shared)."""
+    shares = (
+        firebase_db.collection(SHARED_FILES_COLLECTION)
+        .where("owner_id", "==", _user.uid)
+        .stream()
+    )
+    items = []
+    for doc in shares:
+        data = doc.to_dict() or {}
+        file_id = data.get("file_id", "")
+        file_name = file_id.split(":")[-1] if ":" in file_id else file_id
+
+        # Get recipient info
+        shared_user_id = data.get("shared_user_id", "")
+        shared_user_email = ""
+        if shared_user_id:
+            user_doc = firebase_db.collection("users").document(shared_user_id).get()
+            if user_doc.exists:
+                shared_user_email = (user_doc.to_dict() or {}).get("email", "")
+
+        items.append({
+            "share_id": doc.id,
+            "file_id": file_id,
+            "file_name": file_name,
+            "shared_user_id": shared_user_id,
+            "shared_user_email": shared_user_email,
+            "permissions": data.get("permissions", "view"),
+            "sharedExpiryTime": _serialize_timestamp(data.get("sharedExpiryTime")),
+            "createdAt": _serialize_timestamp(data.get("createdAt")),
+        })
+
+    return {"shares": items}

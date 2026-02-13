@@ -11,6 +11,7 @@ from core.constants import ALLOWED_ORIGINS
 from routes.auth import router as auth_router
 from routes.files import router as files_router
 from routes.analytics import router as analytics_router
+from services.expiry_service import start_expiry_checker
 
 
 app = FastAPI(title="Secure File Service", version="1.0.0")
@@ -27,6 +28,12 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(files_router)
 app.include_router(analytics_router)
+
+
+@app.on_event("startup")
+def on_startup():
+    """Start background services when the server starts."""
+    start_expiry_checker()
 
 if __name__ == "__main__":
     import uvicorn

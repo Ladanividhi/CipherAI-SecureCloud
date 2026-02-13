@@ -81,6 +81,8 @@ export default function AppShellLayout() {
         onShare={filesState.handleShare}
         onClose={filesState.handleClosePreview}
         busy={filesState.busy}
+        onExtendExpiry={filesState.extendFileExpiry}
+        onRemoveExpiry={filesState.removeFileExpiry}
       />
 
       <ShareOverlay

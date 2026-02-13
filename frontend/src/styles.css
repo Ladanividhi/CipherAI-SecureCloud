@@ -3070,3 +3070,192 @@ dd {
     align-items: flex-start;
   }
 }
+
+/* ── Expiry Badge (PreviewOverlay) ── */
+.expiry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+.expiry-badge--warning {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.25);
+}
+.expiry-badge--expired {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.25);
+}
+.expiry-badge__extend-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+.expiry-badge__extend-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+  transform: translateY(-1px);
+}
+.expiry-set-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.expiry-set-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Expiry Extension Modal ── */
+.expiry-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.2s ease-out;
+}
+.expiry-modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 28px 32px;
+  width: 420px;
+  max-width: 92vw;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+.expiry-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.expiry-modal__header h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--fg);
+  margin: 0;
+}
+.expiry-modal__close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+}
+.expiry-modal__close:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.06);
+}
+.expiry-modal__current {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 16px 0;
+}
+.expiry-modal__current strong {
+  color: #fbbf24;
+}
+.expiry-modal__label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+.expiry-modal__label span {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+.expiry-modal__input {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--fg);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.expiry-modal__input:focus {
+  border-color: var(--accent);
+}
+.expiry-modal__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.expiry-modal__remove-btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.08);
+  color: #f87171;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.expiry-modal__remove-btn:hover {
+  background: rgba(248, 113, 113, 0.18);
+}
+.expiry-modal__remove-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Shared File Extend Request Button ── */
+.shared-extend-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+  color: #818cf8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+.shared-extend-btn:hover {
+  background: rgba(99, 102, 241, 0.18);
+  transform: translateY(-1px);
+}
+.shared-extend-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
