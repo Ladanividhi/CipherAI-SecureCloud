@@ -11,6 +11,7 @@ from core.constants import ALLOWED_ORIGINS
 from routes.auth import router as auth_router
 from routes.files import router as files_router
 from routes.analytics import router as analytics_router
+from routes.smart_search import router as smart_search_router
 from services.expiry_service import start_expiry_checker
 
 
@@ -28,6 +29,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(files_router)
 app.include_router(analytics_router)
+app.include_router(smart_search_router)
 
 
 @app.on_event("startup")
