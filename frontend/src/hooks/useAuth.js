@@ -74,6 +74,7 @@ export default function useAuth() {
       setAuthError('');
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
+      console.error('Google Auth Error:', error);
       setAuthError(friendlyAuthMessage(error));
     } finally {
       setAuthBusy(false);

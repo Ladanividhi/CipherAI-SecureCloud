@@ -26,6 +26,6 @@ const auth = getAuth(app);
 auth.useDeviceLanguage();
 
 const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+
 
 export { auth, googleProvider };
