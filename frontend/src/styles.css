@@ -181,20 +181,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px;
+  padding: 0;
   z-index: 1100;
 }
 
 .preview-modal {
-  width: min(1000px, 100%);
+  width: 100vw;
+  height: 100dvh;
   background: var(--bg-panel);
-  border-radius: 28px;
-  padding: 32px;
+  border-radius: 0;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
   box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6);
-  max-height: 90vh;
+  max-height: 100dvh;
   overflow: hidden;
 }
 
@@ -210,13 +211,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-y: auto;
-  max-height: calc(90vh - 140px);
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
   padding-right: 8px;
 }
 
 .preview-modal--split {
-  width: min(1200px, 100%);
+  width: 100vw;
 }
 
 .preview-modal--split .preview-modal__content {
@@ -224,15 +226,34 @@ body {
   grid-template-columns: 1.6fr 1fr;
   gap: 16px;
   align-items: stretch;
+  height: 100%;
 }
 
 .preview-modal--split .preview-meta {
   grid-column: 1 / -1;
 }
 
+.preview-modal--split .file-preview,
+.preview-modal--split .pdf-chatbot-panel,
+.preview-modal--split .chat-disabled-panel {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
 @media (max-width: 980px) {
+  .preview-modal {
+    padding: 14px;
+  }
+
   .preview-modal--split .preview-modal__content {
     grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .preview-modal--split .pdf-chatbot-panel,
+  .preview-modal--split .chat-disabled-panel {
+    min-height: 50vh;
   }
 }
 
@@ -300,6 +321,350 @@ body {
   border-radius: 14px;
   padding: 10px 12px;
 }
+
+/* ========== PDF CHATBOT PANEL ========== */
+
+.pdf-chatbot-panel {
+  background: var(--bg-panel-soft, #1a2236);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+}
+
+.pdf-chatbot-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pdf-chatbot-panel__header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+/* Loading state */
+.pdf-chatbot-panel__loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted, #94a3b8);
+  text-align: center;
+}
+
+.pdf-chatbot-panel__loading p {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--text, #f1f5f9);
+}
+
+.pdf-chatbot-panel__loading small {
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
+@keyframes chatbot-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.spin-icon {
+  animation: chatbot-spin 1.2s linear infinite;
+  color: #3b82f6;
+}
+
+/* Error state */
+.pdf-chatbot-panel__error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #ef4444;
+  text-align: center;
+}
+
+.pdf-chatbot-panel__error p {
+  font-size: 0.88rem;
+  max-width: 260px;
+}
+
+/* Welcome state */
+.pdf-chatbot-panel__welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted, #94a3b8);
+  text-align: center;
+}
+
+.pdf-chatbot-panel__welcome p {
+  font-size: 0.88rem;
+}
+
+/* Messages area */
+.pdf-chatbot-panel__messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+  min-height: 0;
+}
+
+.pdf-chatbot-panel__messages::-webkit-scrollbar {
+  width: 5px;
+}
+
+.pdf-chatbot-panel__messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pdf-chatbot-panel__messages::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+/* Chat message */
+.pdf-chat-msg {
+  display: flex;
+  gap: 8px;
+  max-width: 95%;
+  animation: pdf-chat-fadeIn 0.25s ease;
+}
+
+@keyframes pdf-chat-fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pdf-chat-msg--user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.pdf-chat-msg--bot {
+  align-self: flex-start;
+}
+
+.pdf-chat-msg__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pdf-chat-msg--user .pdf-chat-msg__avatar {
+  background: #3b82f6;
+  color: white;
+}
+
+.pdf-chat-msg--bot .pdf-chat-msg__avatar {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text, #f1f5f9);
+}
+
+.pdf-chat-msg__bubble {
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.pdf-chat-msg__formatted {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pdf-chat-msg__formatted p,
+.pdf-chat-msg__formatted ul,
+.pdf-chat-msg__formatted ol {
+  margin: 0;
+}
+
+.pdf-chat-msg__formatted ul,
+.pdf-chat-msg__formatted ol {
+  padding-left: 18px;
+}
+
+.pdf-chat-msg__formatted li + li {
+  margin-top: 4px;
+}
+
+.pdf-chat-msg__formatted code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(15, 23, 41, 0.45);
+}
+
+.pdf-chat-msg__heading {
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.pdf-chat-msg__heading--h1 { font-size: 1.02rem; }
+.pdf-chat-msg__heading--h2 { font-size: 0.98rem; }
+.pdf-chat-msg__heading--h3 { font-size: 0.94rem; }
+.pdf-chat-msg__heading--h4,
+.pdf-chat-msg__heading--h5,
+.pdf-chat-msg__heading--h6 { font-size: 0.9rem; }
+
+.pdf-chat-msg__rule {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 2px 0;
+}
+
+.pdf-chat-msg__code-wrap {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #0c1220;
+}
+
+.pdf-chat-msg__code-lang {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pdf-chat-msg__code-block {
+  margin: 0;
+  padding: 10px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.pdf-chat-msg__code-block code {
+  display: block;
+  white-space: pre;
+  padding: 0;
+  background: transparent;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.pdf-chat-msg--user .pdf-chat-msg__bubble {
+  background: #3b82f6;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.pdf-chat-msg--bot .pdf-chat-msg__bubble {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text, #f1f5f9);
+  border-bottom-left-radius: 4px;
+}
+
+/* Typing dots */
+.pdf-chatbot-typing {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.pdf-chatbot-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted, #94a3b8);
+  animation: pdf-chatbot-bounce 1.4s infinite ease-in-out;
+}
+
+.pdf-chatbot-typing span:nth-child(2) { animation-delay: 0.15s; }
+.pdf-chatbot-typing span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes pdf-chatbot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* Input bar */
+.pdf-chatbot-panel__input {
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 10px;
+}
+
+.pdf-chatbot-panel__input input {
+  flex: 1;
+  background: #0f1729;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text, #f1f5f9);
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.pdf-chatbot-panel__input input:focus {
+  border-color: #3b82f6;
+}
+
+.pdf-chatbot-panel__input input::placeholder {
+  color: var(--muted, #94a3b8);
+}
+
+.pdf-chatbot-panel__input input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pdf-chatbot-send-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 0 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.pdf-chatbot-send-btn:hover {
+  background: #2563eb;
+}
+
+.pdf-chatbot-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ========== END PDF CHATBOT PANEL ========== */
 
 .preview-modal__content .file-preview {
   flex: 1;
@@ -1257,8 +1622,8 @@ body {
 .file-preview {
   width: 100%;
   border-radius: 16px;
-  min-height: 220px;
-  max-height: 65vh;
+  min-height: 0;
+  height: 100%;
   background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.15), transparent 60%),
     linear-gradient(135deg, rgba(79, 124, 255, 0.35), rgba(94, 129, 255, 0.65));
   display: flex;
@@ -1272,8 +1637,9 @@ body {
 
 .file-preview.live {
   background: #050913;
-  min-height: 60vh;
-  max-height: 65vh;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
   padding: 0;
   overflow: auto;
 }

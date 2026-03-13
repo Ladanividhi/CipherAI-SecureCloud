@@ -1,0 +1,233 @@
+[
+  {
+    "id": "1621742b5b0f",
+    "text": "Controllers in ASP .NET Core Web API",
+    "source": "3_Controllers.pdf",
+    "page_number": 1,
+    "chunk_index": 0
+  },
+  {
+    "id": "9daa624c9b20",
+    "text": "What are Controllers? • In ASP.NET Core Web API, controllers are responsible for handling HTTP requests and returning data (usually in JSON or XML format) to the client. • They manage the flow of data between the server and the client. • Roles of Controller: – Request Handling: Controllers receive HTTP requests and send responses. – Data Processing: They interact with models to process data and implement application logic. – Response Generation: Controllers decide the type of response sent back",
+    "source": "3_Controllers.pdf",
+    "page_number": 2,
+    "chunk_index": 1
+  },
+  {
+    "id": "db5461656428",
+    "text": "plement application logic. – Response Generation: Controllers decide the type of response sent back to the client, whether it’s data, status codes, error messages, etc",
+    "source": "3_Controllers.pdf",
+    "page_number": 2,
+    "chunk_index": 2
+  },
+  {
+    "id": "8415ccd5f22c",
+    "text": "Adding Controller Class • The Controller class in ASP.NET Core Web API must have the “Controller” suffix. • For example, if developer wants to add a controller with the name Home, then the name should be HomeController. • Controllers in ASP.NET Core Web API are typically created by inheriting from the ControllerBase class. – This provides access to several helper methods and properties that are useful for handling HTTP requests and responses.",
+    "source": "3_Controllers.pdf",
+    "page_number": 3,
+    "chunk_index": 3
+  },
+  {
+    "id": "fff12694f3e1",
+    "text": "eful for handling HTTP requests and responses.",
+    "source": "3_Controllers.pdf",
+    "page_number": 3,
+    "chunk_index": 4
+  },
+  {
+    "id": "4f155d538395",
+    "text": "Add New Scaffolded Item 4 Installed 4 Common API > Blazor b MVC Razor Pages Identity Layout API Controller - Empty API Controller with read/write actions API Controller with actions, using Entity Framework API with read/write endpoints API with read/write endpoints, using Entity Framework API Controller - Empty by Microsoft v1.0.0.0 An empty API controller. Id: ApiControllerEmptyScaffol",
+    "source": "3_Controllers.pdf",
+    "page_number": 4,
+    "chunk_index": 5
+  },
+  {
+    "id": "cf5047760756",
+    "text": "Adding Controller Class • API Controller – Empty: • This template creates a basic API controller class without any predefined actions. • It’s suitable when developer wants full control over defining own actions and routing. • Developer needs to use this template when it is preferred to manually define all CRUD operations and their corresponding HTTP verbs (GET, POST, PUT, DELETE). • It starts with an empty controller class that needs to be populated with the desired actions.",
+    "source": "3_Controllers.pdf",
+    "page_number": 5,
+    "chunk_index": 6
+  },
+  {
+    "id": "c0c6ba99b3c1",
+    "text": "an empty controller class that needs to be populated with the desired actions.",
+    "source": "3_Controllers.pdf",
+    "page_number": 5,
+    "chunk_index": 7
+  },
+  {
+    "id": "36a75a3b71f9",
+    "text": "Adding Controller Class • API Controller with Read/Write Actions: • This template scaffolds a controller with basic CRUD actions (Get, Post, Put, Delete). • It’s useful for quickly setting up a controller that supports standard RESTful operations. • It sets up actions for listing all resources, retrieving a resource by ID, creating a new resource, updating an existing resource, and deleting a resource.",
+    "source": "3_Controllers.pdf",
+    "page_number": 6,
+    "chunk_index": 8
+  },
+  {
+    "id": "2fab5362f58a",
+    "text": "urce.",
+    "source": "3_Controllers.pdf",
+    "page_number": 6,
+    "chunk_index": 9
+  },
+  {
+    "id": "c0e6e2ef2d67",
+    "text": "Adding Controller Class • API Controller with Actions using Entity Framework: • This template extends the “API Controller with Read/Write Actions” template by integrating with Entity Framework Core. • It includes actions that interact with a database using EF Core for data access operations. • It sets up actions that use EF Core to perform CRUD operations on database entities.",
+    "source": "3_Controllers.pdf",
+    "page_number": 7,
+    "chunk_index": 10
+  },
+  {
+    "id": "aa614c1f6115",
+    "text": "Adding Controller Class • API with Read/Write Endpoints: • Similar to “API Controller with Read/Write Actions,” this template includes actions for CRUD operations but provides more flexibility in customizing endpoint names and HTTP verbs. • This template should be used when it is needed to have more control over endpoint naming or to include additional actions beyond basic CRUD operations.",
+    "source": "3_Controllers.pdf",
+    "page_number": 8,
+    "chunk_index": 11
+  },
+  {
+    "id": "9eb05583f2f8",
+    "text": "Adding Controller Class • API Controller with Read/Write Endpoints using Entity Framework: • This template Combines the features of “API Controller with Actions using Entity Framework” with the flexibility of customized endpoint names and HTTP verbs. • Developer needs to choose this template when it is required to have both database integration (via EF Core) and custom endpoint naming.",
+    "source": "3_Controllers.pdf",
+    "page_number": 9,
+    "chunk_index": 12
+  },
+  {
+    "id": "3c12b6e5568c",
+    "text": "4 Installed Sort by: Default 4 Ct General b ASP.NET Core b Online EmplolyeeController.cs fs cH Class Interface Razor Component MVC Controller - Empty MVC Controller with read/write actions API Controller - Empty API Controller with read/write actions Razor Page - Empty Razor View - Empty Razor Layout Assembly Information File Code File Machine Learning Model (ML.NET) Razor View Start Search (Ctrl+E) Type: C+ Empty API Controller Class Cancel",
+    "source": "3_Controllers.pdf",
+    "page_number": 10,
+    "chunk_index": 13
+  },
+  {
+    "id": "149f02422cb2",
+    "text": "E) Type: C+ Empty API Controller Class Cancel",
+    "source": "3_Controllers.pdf",
+    "page_number": 10,
+    "chunk_index": 14
+  },
+  {
+    "id": "d23f4411a47e",
+    "text": "EmployeeControllercs + &|WebAPIDemo @g WebAP|Demo.Controllers.EmployeeCo (aq 19 ~ | Microsoft.AspNetCore.Http; using Microsoft.AspNetCore.Mvc; v Namespace WebAPIDemo.ControLlers { LRoute(\"api/[controLler]\")] sci ublic class EmployeeControLller : ControllerBase }",
+    "source": "3_Controllers.pdf",
+    "page_number": 11,
+    "chunk_index": 15
+  },
+  {
+    "id": "f9dd3cde750c",
+    "text": "&|WebAPIDemo , %g WebAPIDemo.Controllers.EmployeeController (a v using Microsoft.AspNetCore.Http; using Microsoft.AspNetCore.Mvc; v namespace WebAPIDemo.Controllers {Route(\"api/[controller]\")] {ApiController] at v nae Pee EmployeeController : ControllerBase (HttpGet] y public string Get() { return \"Returning from EmployeeController Get Method\";",
+    "source": "3_Controllers.pdf",
+    "page_number": 12,
+    "chunk_index": 16
+  },
+  {
+    "id": "6c060f9e2c99",
+    "text": "> Cc 23 localhost:7235/swagger/index.html Swagger by SMARTBEAR WebAPIDemo @ https:/Mocalhost:7235/swagger/v1/swagger json Employee | /api/Employee ¥ = @ localhost:7235/api/employee x a. € CG _28_—« localhost:7235/api/employee Returning from EmployeeController Get Method",
+    "source": "3_Controllers.pdf",
+    "page_number": 13,
+    "chunk_index": 17
+  },
+  {
+    "id": "26d74f47a5f0",
+    "text": "&|WebAPIDemo . og WebAP|Demo.Controllers.EmployeeController {qa ‘ using Microsoft.AspNetCore.Http; using Microsoft.AspNetCore.Mvc; , namespace WebAPIDemo.ControLlers { (Route(\"api/[controller]\")] [Apicontroller] public class EmpLoyeeController : ControllerBase { [HttpGet] public string Get() { return \"Returning from EmployeeController Get Method\"; } [HttpGet] public string GetEmpLoyee() { return \"Returning from EmployeeController GetEmpLoyee Method\";",
+    "source": "3_Controllers.pdf",
+    "page_number": 14,
+    "chunk_index": 18
+  },
+  {
+    "id": "b560b6f03620",
+    "text": "Returning from EmployeeController GetEmpLoyee Method\";",
+    "source": "3_Controllers.pdf",
+    "page_number": 14,
+    "chunk_index": 19
+  },
+  {
+    "id": "55b50aac678d",
+    "text": "As per Web API standards, each resource should have a Unique Identifier.",
+    "source": "3_Controllers.pdf",
+    "page_number": 15,
+    "chunk_index": 20
+  },
+  {
+    "id": "ff597086f40a",
+    "text": "EmployeeController.cs* + X &]WebAPIDemo ’ ag WebAP|Demo.Controllers.EmployeeController using Microsott.AspNetCore.Mvc; v namespace WebAPIDemo.Controllers { (Route(\"api/[controller]/[action]\")] [ApiController] public class EmployeeController : ControllerBase { [HttpGet] public string Get() return \"Returning from EmployeeController Get Method\"; ee Taieateien GetEmpLoyee() { return \"Returning from EmployeeControLller GetEmpLoyee Method\";",
+    "source": "3_Controllers.pdf",
+    "page_number": 16,
+    "chunk_index": 21
+  },
+  {
+    "id": "62701df39f3f",
+    "text": "ployeeControLller GetEmpLoyee Method\";",
+    "source": "3_Controllers.pdf",
+    "page_number": 16,
+    "chunk_index": 22
+  },
+  {
+    "id": "f5f57c56d5b2",
+    "text": "Cc 23 localhost:7235/swagger/index.html swagger AART BEAR WebAPIDemo @ https://localhost:7235/swagger/v1/swaggerjson Employee /api/Employee/Get /api/Employee/GetEmployee",
+    "source": "3_Controllers.pdf",
+    "page_number": 17,
+    "chunk_index": 23
+  },
+  {
+    "id": "0a15687a77b9",
+    "text": "©) localhost7235/api/employee/g + © G 23 localhost:7235/api/employee/get Returning from EmployeeController Get Method v @ localhost:7235/api/employee/g + < Cc 23 localhost:7235/api/employee/getemployee Returning from EmployeeController GetEmployee Method",
+    "source": "3_Controllers.pdf",
+    "page_number": 18,
+    "chunk_index": 24
+  },
+  {
+    "id": "37dd09d03d66",
+    "text": "Features of Controllers • Controllers use attributes to define routes. • The [Route] attribute specifies how to access the controller via URL patterns. • The [ApiController] attribute decorates the class to enable Web API-specific behaviors. • Inside controllers, methods known as action methods respond to HTTP requests. • Each method is typically decorated with an attribute corresponding to an HTTP method ([HttpGet], [HttpPost], etc.), defining what type of request it handles.",
+    "source": "3_Controllers.pdf",
+    "page_number": 19,
+    "chunk_index": 25
+  },
+  {
+    "id": "49bc80b5e5b9",
+    "text": "P method ([HttpGet], [HttpPost], etc.), defining what type of request it handles.",
+    "source": "3_Controllers.pdf",
+    "page_number": 19,
+    "chunk_index": 26
+  },
+  {
+    "id": "369fee32405d",
+    "text": "Features of Controllers • Action methods can accept parameters directly from the route, query string or body of the request, which ASP.NET Core binds automatically. • Controllers use IActionResult or ActionResult<T> to return responses. • These can encapsulate various HTTP responses, allowing for easy customization of status codes and payloads.",
+    "source": "3_Controllers.pdf",
+    "page_number": 20,
+    "chunk_index": 27
+  },
+  {
+    "id": "1708740c9bb2",
+    "text": "Features of APIController Attribute • Automatic HTTP 400 Responses: • When applied to a controller, ASP.NET Core automatically validates the model state of incoming HTTP requests. • Attribute Routing Requirement: • The [ApiController] attribute makes attribute routing mandatory for the controller. • This means developer must use [Route], [HttpGet], [HttpPost], etc., to define routes for the controller’s actions.",
+    "source": "3_Controllers.pdf",
+    "page_number": 21,
+    "chunk_index": 28
+  },
+  {
+    "id": "333ecdc0c5a0",
+    "text": "ller’s actions.",
+    "source": "3_Controllers.pdf",
+    "page_number": 21,
+    "chunk_index": 29
+  },
+  {
+    "id": "1f8e0ab1f8c6",
+    "text": "Features of APIController Attribute • Binding Source Parameter Inference: • The [ApiController] attribute enhances the binding of incoming data by inferring where to look for data based on the type of the parameter and the HTTP method of the request. • For example, in case of a POST method, it assumes binding from the request body. • Problem Details for HTTP Error Responses: • When an action method returns an error (e.g., BadRequest, NotFound, Internal Server Error), the [ApiController] attribut",
+    "source": "3_Controllers.pdf",
+    "page_number": 22,
+    "chunk_index": 30
+  },
+  {
+    "id": "eb135bb66cf4",
+    "text": "d returns an error (e.g., BadRequest, NotFound, Internal Server Error), the [ApiController] attribute automatically generates a ProblemDetails response",
+    "source": "3_Controllers.pdf",
+    "page_number": 22,
+    "chunk_index": 31
+  },
+  {
+    "id": "b956669776f2",
+    "text": "Choosing between Controller and ControllerBase Classes • APIs: • For building a RESTful API without views, ControllerBase is used to keep the project lightweight and focused on data endpoints. • MVC Applications: • If the application requires server-side rendering of views using Razor views, Controller is used to leverage its support for views and related functionalities.",
+    "source": "3_Controllers.pdf",
+    "page_number": 23,
+    "chunk_index": 32
+  }
+]

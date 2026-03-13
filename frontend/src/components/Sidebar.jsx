@@ -23,7 +23,6 @@ const fallbackUser = {
 const navLinks = [
   { label: 'Dashboard', badge: null, to: '/dashboard', icon: LayoutDashboard },
   { label: 'My Files', badge: null, to: '/my-files', icon: FolderOpen },
-  { label: 'AI Assistant', badge: 'NEW', icon: Bot },
   { label: 'Smart Search', to: '/smart-search', icon: Search },
   { label: 'Analytics', to: '/analytics', icon: PieChart },
   { label: 'Shared with me', to: '/shared', icon: Share2 },

@@ -6,3 +6,10 @@ firebase-admin
 boto3
 python-dotenv
 requests
+pypdf
+sentence-transformers
+faiss-cpu
+huggingface-hub
+pdf2image
+pytesseract
+Pillow

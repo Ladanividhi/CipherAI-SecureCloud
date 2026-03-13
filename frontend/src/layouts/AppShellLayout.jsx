@@ -83,6 +83,7 @@ export default function AppShellLayout() {
         busy={filesState.busy}
         onExtendExpiry={filesState.extendFileExpiry}
         onRemoveExpiry={filesState.removeFileExpiry}
+        authorizedFetch={filesState.authorizedFetch}
       />
 
       <ShareOverlay

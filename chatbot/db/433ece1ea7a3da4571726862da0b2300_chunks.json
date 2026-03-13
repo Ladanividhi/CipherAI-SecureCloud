@@ -1,0 +1,282 @@
+[
+  {
+    "id": "526d2bdaa603",
+    "text": "Models in ASP.Net Core WebAPI",
+    "source": "5_Models.pdf",
+    "page_number": 1,
+    "chunk_index": 0
+  },
+  {
+    "id": "6af20bb32121",
+    "text": "Models • In ASP.NET Core Web API, models serve as the backbone for representing and managing data within an application. • They define – The structure of data – Apply validation rules to ensure integrity – Establish relationships between entities when working with databases",
+    "source": "5_Models.pdf",
+    "page_number": 2,
+    "chunk_index": 1
+  },
+  {
+    "id": "1103dd0ee2b8",
+    "text": "Models • Models serve as blueprints that guide the flow of data between the client and server • Models are essential for – Handling client requests – Processing business logic – Persisting information in a reliable and organized manner.",
+    "source": "5_Models.pdf",
+    "page_number": 3,
+    "chunk_index": 2
+  },
+  {
+    "id": "af518ee908ad",
+    "text": "Key Features of Models • Data Representation (POCOs) – Models are typically POCOs (Plain Old CLR Objects), simple classes that do not depend on any base class or framework inheritance. – They define properties that reflect the data structure of the application or API. – These classes form the foundation for handling real-world entities, such as employees, Products, or Orders.",
+    "source": "5_Models.pdf",
+    "page_number": 4,
+    "chunk_index": 3
+  },
+  {
+    "id": "63ed2fa50b7e",
+    "text": "Key Features of Models • Data Validation with Data Annotations – Models can be annotated with attributes from the System.ComponentModel.DataAnnotations namespace to apply validation rules. These rules validate incoming data automatically before it reaches business logic. – Common Data Annotations: • [Required] → ensures a property is not null or empty. • [StringLength(50)] → restricts text length. • [Range(1, 100)] → enforces numeric ranges. • [RegularExpression] → checks formats (e.g., email, p",
+    "source": "5_Models.pdf",
+    "page_number": 5,
+    "chunk_index": 4
+  },
+  {
+    "id": "791f0b18ebc8",
+    "text": "• [Range(1, 100)] → enforces numeric ranges. • [RegularExpression] → checks formats (e.g., email, phone numbers). – This reduces bugs and ensures the integrity of incoming data.",
+    "source": "5_Models.pdf",
+    "page_number": 5,
+    "chunk_index": 5
+  },
+  {
+    "id": "f6b83d70c6a2",
+    "text": "Key Features of Models • Defining Relationships (EF Core Models) – When used with Entity Framework Core, models can define relationships such as: • One-to-Many • One-to-One • Many-to-Many • This is done using Navigation Properties and foreign key conventions. • For example, A Product belongs to one Category, while a Category can have many Products (one-to- many).",
+    "source": "5_Models.pdf",
+    "page_number": 6,
+    "chunk_index": 6
+  },
+  {
+    "id": "8590480148bb",
+    "text": "Key Features of Models • DTOs (Data Transfer Objects) – DTOs are not Entity Models — they are Lightweight Classes designed to: • Models can also act as DTOs, which are specialized objects for shaping the data exposed by the API. • Hide sensitive/internal fields (like passwords or internal IDs) and only return what the client actually needs. • DTOs improve security, performance, and clarity of API responses by sending only required data.",
+    "source": "5_Models.pdf",
+    "page_number": 7,
+    "chunk_index": 7
+  },
+  {
+    "id": "b062993d6cab",
+    "text": "responses by sending only required data.",
+    "source": "5_Models.pdf",
+    "page_number": 7,
+    "chunk_index": 8
+  },
+  {
+    "id": "ae9357ee54b1",
+    "text": "Models: Real World Analogy • Think of Models as the blueprint of a house: – They define what rooms (properties) exist, how rooms connect (relationships), and the rules for construction (validation, i.e., size, safety rules). – Entity Framework is like the Builder who uses this blueprint to construct the actual house (database tables). – DTOs are like sales brochures; you don’t show the wiring and plumbing (sensitive data), only what the customer needs to see.",
+    "source": "5_Models.pdf",
+    "page_number": 8,
+    "chunk_index": 9
+  },
+  {
+    "id": "69ad01a23b73",
+    "text": "plumbing (sensitive data), only what the customer needs to see.",
+    "source": "5_Models.pdf",
+    "page_number": 8,
+    "chunk_index": 10
+  },
+  {
+    "id": "69210d05f80c",
+    "text": "Creating Models • Models can technically be placed anywhere, but for clarity and maintainability, you can create models: – In a Dedicated Models folder within the project (recommended for clarity). – In any Folder/Subfolder of the project (common in small projects). – In a Separate Class Library Project, such as MyApp.Domain or MyApp.Models (preferred for larger applications, as they keep domain models independent of the API).",
+    "source": "5_Models.pdf",
+    "page_number": 9,
+    "chunk_index": 11
+  },
+  {
+    "id": "423d1fa82216",
+    "text": "odels independent of the API).",
+    "source": "5_Models.pdf",
+    "page_number": 9,
+    "chunk_index": 12
+  },
+  {
+    "id": "99c6d2ebfb7a",
+    "text": "Solution Explorer 2 ©-SH@ |al- A\\= Search Solution Explorer (Ctri+;) F= Solution 'ProductAPl' 0(1 of 1 project) 4 | ProductAPI b ca Connected Services > 0! Dependencies > 4a) Properties > = [Controllers 4 GS Models b €# Product.cs [ii] appsettings.json el ProductAPl.http €+ Program.cs C# WeatherForecast.cs",
+    "source": "5_Models.pdf",
+    "page_number": 10,
+    "chunk_index": 13
+  },
+  {
+    "id": "e12eaff2b42c",
+    "text": "Productcs Hb = |ProductAPl . ProductAPI .Models Id { ; Name { Price { Category {",
+    "source": "5_Models.pdf",
+    "page_number": 11,
+    "chunk_index": 14
+  },
+  {
+    "id": "80cb15afe330",
+    "text": "Add New Item - ProductAP! 4 Installed 4 Ct General b ASP.NET Core b Online Products{controller.cs Sort by: Default fs c# -O (of fs c# Class Interface Razor Component MVC Controller - Empty MVC Controller with read/write actions API Controller - Empty AP! Controller with read/write actions Razor Page - Empty Razor View - Empty Razor Layout Assembly Information File Code File Machine Learning Model (ML.NET) Razor View Start a Search (Ctrl+E) Type: C# Empty API Controller Class",
+    "source": "5_Models.pdf",
+    "page_number": 12,
+    "chunk_index": 15
+  },
+  {
+    "id": "0952bfa41100",
+    "text": "(ML.NET) Razor View Start a Search (Ctrl+E) Type: C# Empty API Controller Class",
+    "source": "5_Models.pdf",
+    "page_number": 12,
+    "chunk_index": 16
+  },
+  {
+    "id": "0febf8fdb02d",
+    "text": "using Microsoft.AspNetCore.Http; using Microsoft. AspNetCore.Mvc; using ProductAPI.Models; namespace ProductAPI Controllers { [Route(\"api/[controller]\")] [ApiController] public class ProductsController : ControllerBase { private static List<Product> products = new List<Product> ' new Product { Id = 1, Name = \"Laptop\", Price = 1000.00m, Category = \"Electronics\" }, new Product { Id = 2, Name = \"Desktop\", Price = 2000.00m, Category = \"Electronics\" }, new Product { Id = 3, Name = \"Mobile\", Price = 3",
+    "source": "5_Models.pdf",
+    "page_number": 13,
+    "chunk_index": 17
+  },
+  {
+    "id": "21afa5b856d2",
+    "text": "top\", Price = 2000.00m, Category = \"Electronics\" }, new Product { Id = 3, Name = \"Mobile\", Price = 3000.00m, Category = \"Electronics\" }, jj",
+    "source": "5_Models.pdf",
+    "page_number": 13,
+    "chunk_index": 18
+  },
+  {
+    "id": "bc79736d1edd",
+    "text": "// GET: api/products [HttpGet] 0 references public ActionResult<IEnumerable<Product>> GetProducts() { return _products; } // GET: api/products/2 [HttpGet(\"{id}\")] public ActionResult<Product> GetProduct(int id) ; var product = _products.FirstOrDefault(p => p.Id == id); if (product == null) : return NotFound(); teturn product;",
+    "source": "5_Models.pdf",
+    "page_number": 14,
+    "chunk_index": 19
+  },
+  {
+    "id": "7577c1665eaa",
+    "text": "GET • [HttpGet]: Indicates that this action handles HTTP GET requests. • ActionResult<IEnumerable<Product>>: The action returns an IEnumerable of Product, wrapped in an ActionResult for HTTP response flexibility. • ActionResult<Product>: The action returns a Product, wrapped in an ActionResult for HTTP response flexibility. • [HttpGet(“{id}”)]: Specifies that this action responds to a GET request with an id parameter in the route. • This method searches for a product with the given id. If not fo",
+    "source": "5_Models.pdf",
+    "page_number": 15,
+    "chunk_index": 20
+  },
+  {
+    "id": "8035456e9b74",
+    "text": "with an id parameter in the route. • This method searches for a product with the given id. If not found, it returns a 404 Not Found response.",
+    "source": "5_Models.pdf",
+    "page_number": 15,
+    "chunk_index": 21
+  },
+  {
+    "id": "5a071519cbb3",
+    "text": "[HttpPost]: Indicates handling of POST requests. CreatedAtAction: Returns a 201 Created response, and the Location header includes the URI of the new product. POST",
+    "source": "5_Models.pdf",
+    "page_number": 16,
+    "chunk_index": 22
+  },
+  {
+    "id": "d4a71b00c5cb",
+    "text": "PUT [HttpPut(“{id}”)]: Specifies that this action responds to a PUT request and expects an id in the route.",
+    "source": "5_Models.pdf",
+    "page_number": 17,
+    "chunk_index": 23
+  },
+  {
+    "id": "76620a9a5b3b",
+    "text": "DELETE [HttpDelete(“{id}”)]: Indicates that this action handles DELETE requests with an id parameter.",
+    "source": "5_Models.pdf",
+    "page_number": 18,
+    "chunk_index": 24
+  },
+  {
+    "id": "2b894cdd59ba",
+    "text": "[i ale localhost: * 285/swagqgger/inde Svvagrgeer SMARTBAE AFR ProductAP! & @G- https localhost f22.5/swaggqerwl/swagqgqerjson Products SET /api/yProducts | saps /Product= GET fapi/Products/ {id} [rut eer Lou== Baers",
+    "source": "5_Models.pdf",
+    "page_number": 19,
+    "chunk_index": 25
+  },
+  {
+    "id": "2078e99e8839",
+    "text": "Request URL https://localhost :7285/api/Products Server response Code Details 200 Response body [ { \"id\": 1, “name\": “Laptop”, \"price\": : “category”: “Electronics” }s “id\": 2, “name\": “Desktop”, \"price\": ' “category”: “Electronics” , { \"id\": 3, \"name\": \"Mobile\", “price™: a “category”: “Electronics” }",
+    "source": "5_Models.pdf",
+    "page_number": 20,
+    "chunk_index": 26
+  },
+  {
+    "id": "c63c0f02b18b",
+    "text": "Request URL https://localhost :7285/api/Products/2 Server response Code Details 200 Response body EF : ; “name\": \"Desktop\", \"price\": ; \"category\": \"Electronics\"",
+    "source": "5_Models.pdf",
+    "page_number": 21,
+    "chunk_index": 27
+  },
+  {
+    "id": "de93554f03c0",
+    "text": "POST /api/Products “~~ — No parameters Request body application/json v “id\": 4, “name\"“: “Tablet™, “price\": 6000, “category”: “Electronics”",
+    "source": "5_Models.pdf",
+    "page_number": 22,
+    "chunk_index": 28
+  },
+  {
+    "id": "e8faa2145486",
+    "text": "Request URL https://localhost :7285/api/Products Server response Code Details 201 ented Response body { \"id\": 4, “name\": \"Tablet\", \"price\": ' \"category\": “Electronics” }",
+    "source": "5_Models.pdf",
+    "page_number": 23,
+    "chunk_index": 29
+  },
+  {
+    "id": "e3281d00b8fe",
+    "text": "Request URL https: //localhost:7285/api/Products/4 Server response Code Details a Response body { \"0\" : \"name\": \"Tablet\", \"price\": : \"category\": “Electronics”",
+    "source": "5_Models.pdf",
+    "page_number": 24,
+    "chunk_index": 30
+  },
+  {
+    "id": "84ffc401977a",
+    "text": "/api/Products/{id} Name Description id * required integer ($int32) 4 (path) Request body application/json Me \"id\": 4, “name\": \"Tablet\", \"price\": 20000, “category”: \"Electronics|\"",
+    "source": "5_Models.pdf",
+    "page_number": 25,
+    "chunk_index": 31
+  },
+  {
+    "id": "1207f58ccf74",
+    "text": "Request URL https://localhost :7285/api/Products/4 Server response Code Details 204 Undocumented Response headers date: Sat,14 Dec 2624 07:23:29 GMT server: Kestrel",
+    "source": "5_Models.pdf",
+    "page_number": 26,
+    "chunk_index": 32
+  },
+  {
+    "id": "296b1b72f84e",
+    "text": "/api/Products/{id} Parameters Name Description id * required integer ($int32) 4 (path)",
+    "source": "5_Models.pdf",
+    "page_number": 27,
+    "chunk_index": 33
+  },
+  {
+    "id": "6920c6fea35a",
+    "text": "Request URL https://localhost:7285/api/Products/4 Server response Code Details 204 Response headers Undocumented date: Sat,14 Dec 2624 07:26:26 GAT server: Kestrel",
+    "source": "5_Models.pdf",
+    "page_number": 28,
+    "chunk_index": 34
+  },
+  {
+    "id": "522cec2ce090",
+    "text": "Request URL https://localhost:7285/api/Products/4 Server response Code Details 404 Error: response status is 404 Undocumented Response body { \"type\": \"https: //tools.ietf.org/html/rfc9110#section-15.5.5\" \"title\": \"Not Found\", “status”: . “traceld\": \"@0-913Ff092da7cOccfeel9dcb8?450733F-1ce@/c132c8 Ee 1-€ Download }",
+    "source": "5_Models.pdf",
+    "page_number": 29,
+    "chunk_index": 35
+  },
+  {
+    "id": "3da1e1231ef5",
+    "text": "Usage of Models • Binding Data: Models are used to bind incoming data from HTTP requests to strongly typed objects that API controllers can process. • Returning Data: Models are also used to return data in HTTP responses, providing a structured format that clients can understand. • DTOs (Data Transfer Objects): In the context of Web APIs, models are used as Data Transfer Objects (DTOs). DTOs are objects that carry data between processes, in this case, between the client and the server.",
+    "source": "5_Models.pdf",
+    "page_number": 30,
+    "chunk_index": 36
+  },
+  {
+    "id": "3c37494e9d6f",
+    "text": "bjects that carry data between processes, in this case, between the client and the server.",
+    "source": "5_Models.pdf",
+    "page_number": 30,
+    "chunk_index": 37
+  },
+  {
+    "id": "04423042d678",
+    "text": "Usage of Models • By using DTOs, we can customize which data is sent over the network and optimize interaction between the client and server. • Validation: – Models often include validation rules that ensure data integrity before it’s processed by the application or saved to a database. – ASP.NET Core uses data annotations and other validation frameworks to automate this process. – If the model state is invalid, the API returns a response with the validation errors.",
+    "source": "5_Models.pdf",
+    "page_number": 31,
+    "chunk_index": 38
+  },
+  {
+    "id": "84f56b983662",
+    "text": "ate is invalid, the API returns a response with the validation errors.",
+    "source": "5_Models.pdf",
+    "page_number": 31,
+    "chunk_index": 39
+  }
+]

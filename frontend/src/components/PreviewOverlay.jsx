@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Maximize2, Clock, CalendarPlus, X as XIcon } from 'lucide-react';
 import StatusPill from './StatusPill';
+import PdfChatbot from './PdfChatbot';
 import { formatBytes, formatDate } from '../utils/formatters';
 
 function isAdvanceSecurityEnabled(file) {
@@ -10,31 +11,7 @@ function isAdvanceSecurityEnabled(file) {
   return true;
 }
 
-function ChatbotDisabledPanel() {
-  return (
-    <div className="chat-disabled-panel">
-      <div className="chat-disabled-panel__header">
-        <h4>Assistant</h4>
-        <span className="muted">Disabled</span>
-      </div>
-      <div className="chat-disabled-panel__messages">
-        <div className="chat-bubble chat-bubble--assistant">
-          Assistant is disabled due to security settings.
-        </div>
-        <div className="chat-bubble chat-bubble--user">Can you summarize this?</div>
-        <div className="chat-bubble chat-bubble--assistant">
-          This file is protected. Only you can view it.
-        </div>
-      </div>
-      <div className="chat-disabled-panel__composer">
-        <input type="text" disabled value="Assistant disabled due to security settings" />
-        <button type="button" disabled className="primary-btn">Send</button>
-      </div>
-    </div>
-  );
-}
-
-export default function PreviewOverlay({ visible, file, previewUrl, status, onDownload, onShare, onClose, busy, onExtendExpiry, onRemoveExpiry }) {
+export default function PreviewOverlay({ visible, file, previewUrl, status, onDownload, onShare, onClose, busy, onExtendExpiry, onRemoveExpiry, authorizedFetch }) {
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [newExpiryDate, setNewExpiryDate] = useState('');
   const [expiryUpdating, setExpiryUpdating] = useState(false);
@@ -48,6 +25,11 @@ export default function PreviewOverlay({ visible, file, previewUrl, status, onDo
   const lowerName = (file.file_name || file.filename)?.toLowerCase() || '';
   const isPdf = lowerName.endsWith('.pdf');
   const isImage = /(png|jpe?g|gif|webp)$/i.test(lowerName);
+
+  // Show chatbot panel only when PDF has advance_security OFF.
+  const showChatbotPanel = isPdf && !advanceSecurityEnabled;
+  // Split layout whenever the chatbot panel is visible (PDF files)
+  const useSplitLayout = showChatbotPanel;
 
   const hasExpiry = Boolean(file.expiry_time);
   const expiryDate = file.expiry_time ? new Date(file.expiry_time) : null;
@@ -102,7 +84,7 @@ export default function PreviewOverlay({ visible, file, previewUrl, status, onDo
 
   return (
     <div className="preview-overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className={`preview-modal ${advanceSecurityEnabled ? '' : 'preview-modal--split'}`} onClick={(event) => event.stopPropagation()}>
+      <div className={`preview-modal ${useSplitLayout ? 'preview-modal--split' : ''}`} onClick={(event) => event.stopPropagation()}>
         <header className="preview-modal__header">
           <div>
             <p className="details-title">{file.file_name || file.filename}</p>
@@ -131,7 +113,15 @@ export default function PreviewOverlay({ visible, file, previewUrl, status, onDo
         </header>
         <div className="preview-modal__content">
           <div className={`file-preview ${previewUrl ? 'live' : ''}`}>{renderPreview()}</div>
-          {!advanceSecurityEnabled ? <ChatbotDisabledPanel /> : null}
+          {/* PDF Chatbot: real chatbot when advance_security OFF, disabled panel when ON */}
+          {showChatbotPanel && (
+            <PdfChatbot
+              fileName={file.file_name || file.filename}
+              fileId={file.id}
+              authorizedFetch={authorizedFetch}
+              visible={visible}
+            />
+          )}
           <div className="preview-meta">
             <StatusPill status={file.status} />
             {/* Expiry Badge */}
