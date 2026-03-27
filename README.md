@@ -19,31 +19,24 @@
 
 ## 📋 Table of Contents
 
-1.  [Introduction](#-introduction)
-2.  [Problem Statement](#-problem-statement)
-3.  [Proposed Solution](#-proposed-solution)
-4.  [Key Features](#-key-features)
-5.  [System Architecture](#-system-architecture)
-6.  [Technology Stack](#-technology-stack)
-7.  [User Roles](#-user-roles)
-8.  [Workflow Explanation](#-workflow-explanation)
-9.  [Project Structure](#-project-structure)
-10. [Blockchain Smart Contract Design](#-blockchain-smart-contract-design)
-11. [Database Design (MongoDB / Firestore)](#-database-design-mongodb--firestore)
-12. [IPFS & Pinata Usage](#-ipfs--pinata-usage)
-13. [Security Considerations](#-security-considerations)
-14. [Local Development Setup](#-local-development-setup)
-15. [How to Run the Project](#-how-to-run-the-project)
-16. [Demo Instructions](#-demo-instructions)
-17. [Use Cases](#-use-cases)
-18. [Advantages of the System](#-advantages-of-the-system)
-19. [Limitations](#-limitations)
-20. [Future Scope](#-future-scope)
-21. [Hackathon Context](#-hackathon-context)
-22. [Team Contributions](#-team-contributions)
-23. [Challenges Faced](#-challenges-faced)
-24. [Conclusion](#-conclusion)
-25. [References / Resources](#-references--resources)
+1.  [Introduction](#introduction)
+2.  [Problem Statement](#problem-statement)
+3.  [Proposed Solution](#proposed-solution)
+4.  [Key Features](#key-features)
+5.  [System Architecture](#system-architecture)
+6.  [Technology Stack](#technology-stack)
+7.  [User Roles](#user-roles)
+8.  [Workflow Explanation](#workflow-explanation)
+9.  [Project Structure](#project-structure)
+10. [Database Design (MongoDB / Firestore)](#database-design-mongodb--firestore)
+11. [Local Development Setup](#local-development-setup)
+12. [How to Run the Project](#how-to-run-the-project)
+13. [Demo Instructions](#demo-instructions)
+14. [Use Cases](#use-cases)
+15. [Advantages of the System](#advantages-of-the-system)
+16. [Limitations](#limitations)
+17. [Future Scope](#future-scope)
+18. [Conclusion](#conclusion)
 
 ---
 
@@ -756,7 +749,7 @@ python -m models.tag
 A hospital stores patient records — MRI scans, lab results, prescriptions. Each document is AES-256 encrypted on upload, tagged under **"Medical Records"**, and shared with specific doctors with **View Only** access. Records auto-expire after treatment completion.
 
 ### 2. Legal & Compliance
-A law firm manages confidential case files. Documents are encrypted and organized by case under custom tags. Sharing with external counsel uses **permission-controlled** access with **expiry dates**. The audit trail (future blockchain integration) provides compliance evidence.
+A law firm manages confidential case files. Documents are encrypted and organized by case under custom tags. Sharing with external counsel uses **permission-controlled** access with **expiry dates**.
 
 ### 3. Financial Services
 An accountant manages tax returns and financial statements. Files are tagged under **"Finance"**, **"Tax Records"**, and **"Bank Documents"**. Smart Search helps quickly find *"all tax returns from 2024"* using natural language.
