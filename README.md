@@ -11,7 +11,7 @@
 ![AWS S3](https://img.shields.io/badge/AWS-S3-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-> A comprehensive, security-first cloud storage solution that encrypts every file with **AES-256-CBC + RSA-OAEP** before storage, features **AI-powered natural language search** via LLM, and supports **secure file sharing** with per-recipient cryptographic key re-wrapping.
+> A comprehensive, security-first cloud storage solution that encrypts every file with **AES-256-CBC + RSA-OAEP** before storage, features **AI-powered natural language search** via LLM, supports an **AI PDF Agent** for conversational Q&A on PDFs, and provides **secure file sharing** with per-recipient cryptographic key re-wrapping.
 
 </div>
 
@@ -44,7 +44,7 @@
 
 **CipherAI SecureCloud** is a full-stack encrypted cloud file storage platform designed with a **security-first** philosophy. Every file uploaded to the system is encrypted client-side in memory using **AES-256-CBC** symmetric encryption, with the AES key itself protected via **RSA-OAEP** asymmetric wrapping, before being stored on **AWS S3**. File metadata, encrypted keys, and user profiles are managed through **Google Cloud Firestore**, while authentication is handled by **Firebase Auth** (supporting email/password and Google OAuth).
 
-What sets CipherAI SecureCloud apart is its **AI-powered Smart Search** capability — users can query their files using natural language (e.g., *"show me all PDFs uploaded last week"*), powered by a large language model (LLM) via HuggingFace Inference API. The system also supports **voice-based search** through the Web Speech API, **secure file sharing** with granular permissions and cryptographic key re-wrapping, **automatic file expiry** with email notifications, and a **rich analytics dashboard** with visual charts.
+What sets CipherAI SecureCloud apart is its dual AI layer: **AI-powered Smart Search** for metadata discovery and a **PDF AI Agent** for content-level Q&A on PDF files. During upload, users choose whether to keep **Advance Security ON** (maximum lock-down, chatbot disabled) or switch it OFF (AI Agent enabled for that PDF). The system also supports **voice-based search** through the Web Speech API, **secure file sharing** with granular permissions and cryptographic key re-wrapping, **automatic file expiry** with email notifications, and a **rich analytics dashboard** with visual charts.
 
 ---
 
@@ -77,6 +77,7 @@ CipherAI SecureCloud addresses every identified problem with a layered, defense-
 │  🔐 AES-256-CBC Encryption    → Every file encrypted before S3 │
 │  🗝️  RSA-OAEP Key Wrapping    → AES keys protected by RSA-2048 │
 │  🤖 AI Smart Search (LLM)     → Natural language file queries  │
+│  📄 AI PDF Agent (RAG)        → Ask questions about PDF content │
 │  🎙️  Voice Search              → Web Speech API integration     │
 │  🔗 Secure Sharing             → Per-recipient key re-wrapping  │
 │  ⏰ Auto Expiry + Cleanup      → Background thread + email warn │
@@ -112,11 +113,24 @@ CipherAI SecureCloud addresses every identified problem with a layered, defense-
 ### 📤 File Management
 - Single and **batch upload** (up to 15 files simultaneously)
 - Per-file metadata: tag assignment, expiry date, advance security toggle
+- **Upload mode selection per file**:
+   - **Secure Mode (Advance Security = ON):** strongest restriction, PDF AI Agent disabled
+   - **AI Agent Mode (Advance Security = OFF):** allows conversational PDF assistant
 - "Apply to All" mode for batch configuration
 - File preview (PDF via iframe, images inline)
 - Download with automatic decryption
 - Bulk operations: delete, move between tags, share
 - Tag-based folder organization with 10 default categories
+
+### 📄 AI PDF Agent (Chat With PDF)
+- Available for **PDF files only**
+- Triggered from Preview Overlay when **advance_security = false**
+- Backend route `POST /chatbot/process-pdf` decrypts PDF in memory, extracts text, chunks content, builds FAISS index
+- Semantic retrieval with SentenceTransformers embeddings + FAISS cosine similarity
+- Answer generation via LLM using top-K relevant chunks
+- OCR fallback (pdf2image + Tesseract) for scanned PDFs
+- Chat history persisted per file in Firestore subcollection
+- If a file is uploaded in Secure Mode, chatbot requests are rejected by backend policy
 
 ### 🔗 Secure File Sharing
 - Share files with any registered user by email
@@ -144,7 +158,6 @@ CipherAI SecureCloud addresses every identified problem with a layered, defense-
 
 ### ⚙️ Settings & Account Management
 - **Profile editing**: Display name, avatar URL
-- **Password change**: With Firebase reauthentication
 - **Storage monitoring**: Visual ring chart and usage bar
 - **Account deletion**: Double-confirmation (password + "DELETE" text)
 - **Appearance**: Theme selector (Dark/Light/System)
@@ -186,12 +199,12 @@ CipherAI SecureCloud addresses every identified problem with a layered, defense-
 │  │              Firebase Token Verification                         │    │
 │  └──────────────────────────┬───────────────────────────────────────┘    │
 │                              │                                            │
-│  ┌──────────┐ ┌──────────┐ ┌▼─────────┐ ┌──────────────┐               │
-│  │ auth.py  │ │ files.py │ │analytics │ │ smart_search │               │
-│  │ /auth/*  │ │ /files/* │ │ /analytics│ │ /smart-search│               │
-│  └──────────┘ └────┬─────┘ └──────────┘ └──────┬───────┘               │
-│                     │                            │                        │
-│  ┌─────────────────▼────────────────────────────▼───────────────────┐   │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────┐   │
+│ │ auth.py  │ │ files.py │ │analytics │ │ smart_search │ │ chatbot  │   │
+│ │ /auth/*  │ │ /files/* │ │/analytics│ │ /smart-search│ │/chatbot/*│   │
+│ └──────────┘ └────┬─────┘ └────┬─────┘ └──────┬───────┘ └────┬─────┘   │
+│                    │            │               │               │         │
+│  ┌─────────────────▼────────────▼───────────────▼───────────────▼───┐   │
 │  │            Core Services                                          │   │
 │  │  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌──────────────────┐   │   │
 │  │  │ crypto.py│ │  s3.py   │ │security.py│ │ email_service.py │   │   │
@@ -204,6 +217,13 @@ CipherAI SecureCloud addresses every identified problem with a layered, defense-
 │  │  │AES-256-CBC    │  │ Background Thread │                        │   │
 │  │  │RSA-OAEP Wrap  │  │ 15-min intervals  │                        │   │
 │  │  └───────────────┘  └───────────────────┘                        │   │
+│  │  ┌──────────────────────────────────────────────────────────────┐  │   │
+│  │  │ chatbot/ module                                              │  │   │
+│  │  │ pdf_extractor.py → text+OCR                                 │  │   │
+│  │  │ text_processing.py → chunking                               │  │   │
+│  │  │ embeddings.py → embedding + FAISS index                     │  │   │
+│  │  │ llm.py → answer generation                                  │  │   │
+│  │  └──────────────────────────────────────────────────────────────┘  │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────────┘
                               │
@@ -236,6 +256,12 @@ CipherAI SecureCloud addresses every identified problem with a layered, defense-
 | **boto3** | Latest | AWS S3 SDK for encrypted file storage |
 | **python-dotenv** | Latest | Environment variable management |
 | **requests** | Latest | HuggingFace LLM API calls |
+| **sentence-transformers** | Latest | PDF chunk embedding generation |
+| **faiss-cpu** | Latest | Vector similarity index for PDF retrieval |
+| **pypdf** | Latest | PDF text-layer extraction |
+| **pdf2image** | Latest | Convert PDF pages to images for OCR fallback |
+| **pytesseract** | Latest | OCR on scanned PDF pages |
+| **Pillow** | Latest | Image processing for OCR pipeline |
 | **smtplib** | Built-in | Gmail SMTP email delivery |
 
 ### Frontend
@@ -275,6 +301,7 @@ CipherAI SecureCloud operates with a **single user role model** where every auth
 | **Set Permissions** | Choose "View Only" or "View & Download" for shared files |
 | **Set Expiry** | Define auto-deletion dates for files and shares |
 | **Smart Search** | Use AI-powered natural language and voice search |
+| **PDF AI Agent** | Chat with uploaded PDFs (when Advance Security is OFF) |
 | **View Analytics** | Access personal analytics dashboard |
 | **Manage Account** | Edit profile, change password, manage storage, delete account |
 
@@ -302,15 +329,18 @@ User → Firebase Auth (Email/Password or Google) → ID Token
 
 ```
 1. User selects file(s) + metadata (tag, expiry, advance_security)
-2. Frontend → POST /upload/multiple (FormData: files + JSON metadata)
-3. Backend for each file:
+2. User chooses file mode using `advance_security`:
+   - advance_security = true  → Secure Mode (chatbot disabled)
+   - advance_security = false → AI Agent Mode (chatbot enabled for PDFs)
+3. Frontend → POST /upload/multiple (FormData: files + JSON metadata)
+4. Backend for each file:
    a. Generate random 32-byte AES key + 16-byte IV
    b. PKCS7-pad plaintext → AES-256-CBC encrypt
    c. Encrypted blob = IV (16B) || ciphertext
    d. RSA-OAEP wrap AES key with server's public key → base64 encode
    e. Upload encrypted blob to S3: users/{uid}/files/{filename}.enc
    f. Store metadata + wrapped AES key in Firestore: user_files/{uid}:{filename}
-4. Response: success with file count
+5. Response: success with file count
 ```
 
 ### 3. File Decryption & Preview Flow
@@ -327,7 +357,26 @@ User → Firebase Auth (Email/Password or Google) → ID Token
 3. Frontend creates blob URL → displays in iframe (PDF) or img tag
 ```
 
-### 4. Secure File Sharing Flow
+### 4. PDF AI Agent Flow (Conditional)
+
+```
+1. User opens a PDF in Preview Overlay
+2. Frontend checks file metadata:
+   - If advance_security = true  → chatbot panel hidden/disabled
+   - If advance_security = false → show PDF Assistant panel
+3. Frontend POST /chatbot/process-pdf { file_name }
+4. Backend:
+   a. Verify file ownership and enforce advance_security == false
+   b. Decrypt PDF in memory from S3 + wrapped AES key
+   c. Extract text (pypdf), fallback to OCR for scanned pages
+   d. Create chunks with page metadata
+   e. Generate embeddings and build/load FAISS cache index
+5. User asks question via POST /chatbot/ask
+6. Backend retrieves top-k chunks and asks LLM to generate grounded answer
+7. Chat history is stored under user_files/{file_id}/chat_history
+```
+
+### 5. Secure File Sharing Flow
 
 ```
 1. Owner selects file → clicks Share → searches for recipient by email
@@ -342,7 +391,7 @@ User → Firebase Auth (Email/Password or Google) → ID Token
 5. Recipient sees file in "Shared With Me" → can preview (and download if permitted)
 ```
 
-### 5. Auto-Expiry Flow
+### 6. Auto-Expiry Flow
 
 ```
 Background thread (every 15 minutes):
@@ -352,7 +401,7 @@ Background thread (every 15 minutes):
 4. Scan shared_files where sharedExpiryTime ≤ now + 24h → send warning to shared user
 ```
 
-### 6. AI Smart Search Flow
+### 7. AI Smart Search Flow
 
 ```
 1. User types (or speaks) a natural language query
@@ -405,7 +454,19 @@ CipherAI-SecureCloud/
 │   │   ├── auth.py                       # /auth/verify, /auth/me
 │   │   ├── files.py                      # /upload, /decrypt, /files/*, /download, /share
 │   │   ├── analytics.py                  # /analytics (charts, stats, trends)
-│   │   └── smart_search.py              # /smart-search (LLM-powered NL queries)
+│   │   ├── smart_search.py               # /smart-search (LLM-powered NL queries)
+│   │   └── chatbot.py                    # /chatbot/process-pdf, /chatbot/ask, /chatbot/status
+│   │
+│   ├── 📁 chatbot/                       # PDF AI Agent pipeline modules
+│   │   ├── config.py                     # Model + retrieval settings
+│   │   ├── pdf_extractor.py              # PDF text extraction + OCR fallback
+│   │   ├── text_processing.py            # Chunk generation with page metadata
+│   │   ├── embeddings.py                 # Embedding + FAISS index save/load/search
+│   │   └── llm.py                        # Answer synthesis from retrieved chunks
+│   │
+│   ├── 📁 chatbot_db/                    # Cached FAISS indexes + chunk maps
+│   │   ├── *.faiss                       # Vector index files by content hash
+│   │   └── *_chunks.json                 # Chunk metadata per index
 │   │
 │   └── 📁 services/                      # Background & external services
 │       ├── email_service.py              # Gmail SMTP notifications (HTML templates)
@@ -452,6 +513,7 @@ CipherAI-SecureCloud/
 │       │   ├── FolderCard.jsx           # Tag folder display card
 │       │   ├── MainContent.jsx          # Legacy main content container
 │       │   ├── PreviewOverlay.jsx       # File preview modal (PDF/image)
+│       │   ├── PdfChatbot.jsx           # Embedded PDF Assistant panel
 │       │   ├── ShareOverlay.jsx         # Share dialog (user search, permissions)
 │       │   ├── Sidebar.jsx              # Navigation sidebar with storage bar
 │       │   ├── StatusPill.jsx           # Status badge component
@@ -536,6 +598,8 @@ CipherAI SecureCloud uses **Google Cloud Firestore** (a NoSQL document database)
 | **Firebase Project** | — | Auth + Firestore |
 | **Gmail Account** | — | SMTP email (App Password required) |
 | **HuggingFace Account** | — | API token for Smart Search LLM |
+| **Tesseract OCR** | Latest | OCR fallback for scanned PDFs in PDF AI Agent |
+| **Poppler** | Latest | Required by pdf2image for PDF page conversion |
 
 ### Step 1: Clone the Repository
 
@@ -590,7 +654,7 @@ AWS_S3_BUCKET_NAME=your-bucket-name
 # CORS Origins (comma-separated)
 ALLOWED_ORIGINS=http://localhost:5173
 
-# HuggingFace API (for Smart Search)
+# HuggingFace API (for Smart Search + PDF AI Agent answers)
 HF_TOKEN=hf_your_huggingface_token
 
 # Email Service (Gmail SMTP)
@@ -684,7 +748,9 @@ python -m models.tag
 3. For each file, optionally set:
    - **Tag/Folder**: Choose a category (e.g., Finance, Medical Records)
    - **Expiry Date**: Set auto-deletion date
-   - **Advance Security**: Toggle enhanced security mode
+   - **Advance Security**: Select upload mode
+     - **ON = Secure Mode** (chatbot disabled for that file)
+     - **OFF = AI Agent Mode** (PDF Assistant available)
 4. Use **"Apply to All"** to set the same metadata for all files
 5. Click **"Upload & Encrypt"** — each file is AES-256 encrypted and stored
 
@@ -693,9 +759,22 @@ python -m models.tag
 1. Navigate to **My Files** → click a folder or view untagged files
 2. Click any file to open the **Preview Overlay**
 3. PDFs render inline; images display directly
-4. Click **"Download"** to get the decrypted file
+4. For PDF files uploaded with **Advance Security OFF**, a **PDF Assistant** panel appears
+5. For PDF files uploaded with **Advance Security ON**, PDF Assistant is not available
+6. Click **"Download"** to get the decrypted file
 
-### 4. Share a File
+### 4. Chat With PDF (AI Agent)
+
+1. Open a PDF that was uploaded with **Advance Security OFF**
+2. Wait for the assistant to process and index the PDF content
+3. Ask questions like:
+   - *"Summarize this document"*
+   - *"What does page 5 say about payment terms?"*
+   - *"List key deadlines mentioned in this PDF"*
+4. Review grounded answers generated from retrieved PDF chunks
+5. Continue the conversation with follow-up questions
+
+### 5. Share a File
 
 1. Preview a file → click the **"Share"** button
 2. Search for a user by **email address**
@@ -703,14 +782,14 @@ python -m models.tag
 4. Optionally set a **share expiry date**
 5. Click **"Share"** — the recipient receives an email notification
 
-### 5. View Shared Files
+### 6. View Shared Files
 
 1. Navigate to **"Shared with me"** in the sidebar
 2. View files shared by others with owner info and permission badges
 3. Click to preview; download if permission allows
 4. Request an **expiry extension** if access is about to expire
 
-### 6. AI Smart Search
+### 7. AI Smart Search
 
 1. Navigate to **"Smart Search"** in the sidebar
 2. Try natural language queries:
@@ -721,7 +800,7 @@ python -m models.tag
 3. Click the **microphone icon** for voice search
 4. Click any result to preview the file
 
-### 7. Analytics Dashboard
+### 8. Analytics Dashboard
 
 1. Navigate to **"Analytics"** in the sidebar
 2. Explore:
@@ -732,7 +811,7 @@ python -m models.tag
    - Security metrics
    - Expiring files dashboard
 
-### 8. Account Settings
+### 9. Account Settings
 
 1. Click the **gear icon** or navigate to **Settings**
 2. Explore tabs:
@@ -763,6 +842,9 @@ Individuals store sensitive personal documents — IDs, passports, insurance pol
 ### 6. Enterprise File Sharing
 Teams share confidential business documents with **granular permissions**. The analytics dashboard helps monitor file distribution, and the expiry system ensures temporary access is automatically revoked.
 
+### 7. Contract Review With PDF Agent
+A legal analyst uploads vendor contracts with **Advance Security OFF** and asks the PDF AI Agent to extract payment terms, renewal clauses, and penalties. For highly confidential contracts, they upload with **Advance Security ON** to disable conversational AI access.
+
 ---
 
 ## ✅ Advantages of the System
@@ -772,6 +854,7 @@ Teams share confidential business documents with **granular permissions**. The a
 | **Military-Grade Encryption** | AES-256-CBC + RSA-2048 OAEP — the same standards used by governments |
 | **Zero-Knowledge Storage** | Plaintext never reaches S3; even a storage breach yields useless ciphertext |
 | **AI-Powered UX** | Natural language and voice search lower the barrier to finding files |
+| **Mode-Based AI Control** | Choose Secure Mode or AI Agent Mode per file during upload |
 | **Granular Sharing** | Per-recipient cryptographic key wrapping + permission levels |
 | **Automatic Lifecycle** | File and share expiry with proactive email warnings |
 | **Modern Stack** | React 18 + FastAPI + Firestore — fast, scalable, maintainable |
@@ -800,6 +883,7 @@ Teams share confidential business documents with **granular permissions**. The a
 | **Gmail SMTP** | Email service limited to Gmail; daily send quotas apply |
 | **No 2FA Enforcement** | Two-factor auth toggle exists in UI but is not yet functional |
 | **Browser Compatibility** | Voice search requires Web Speech API (Chrome, Edge, Safari) |
+| **PDF Agent Scope Rules** | PDF chatbot works only for PDFs with `advance_security = false` |
 
 ---
 
